@@ -1,6 +1,9 @@
+use color_eyre::Result;
 use poem_openapi::{Enum, Object};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::utils::hash_password;
 
 pub trait Model<'a> {
     const TABLE: &'a str;
@@ -22,6 +25,8 @@ pub struct User {
     pub email: Option<String>,
     #[oai(skip)]
     pub hashed_password: Option<String>,
+    #[oai(skip)]
+    pub salt: Option<String>,
     #[oai(read_only)]
     pub rsi_id: Option<String>,
     #[oai(skip)]
@@ -33,23 +38,24 @@ pub struct User {
 }
 
 impl User {
-    pub async fn new_from_email(email: &str, password: &str) -> Self {
-        let hashed = password;
+    pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
+        let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();
         let sentinel = format!(
             "[id::{}{}]",
             &id.as_fields().2.to_string(),
             &id.as_fields().1.to_string()
         );
-        Self {
+        Ok(Self {
             id,
             email: Some(email.into()),
-            hashed_password: Some(hashed.into()),
+            hashed_password: Some(hashed),
+            salt: Some(salt),
             rsi_id: None,
             sentinel,
             status: UserStatus::WaitingValidation,
             discord_sf: None,
-        }
+        })
     }
 
     pub async fn new_from_discord(snowflake: &str) -> Self {
@@ -59,6 +65,7 @@ impl User {
             id,
             email: None,
             hashed_password: None,
+            salt: None,
             rsi_id: None,
             sentinel: sentinel.to_string(),
             status: UserStatus::WaitingValidation,
@@ -74,6 +81,18 @@ impl<'a> Model<'a> for User {
 pub struct UpdateUser {
     pub email: Option<String>,
     pub password: Option<String>,
+}
+
+#[derive(Object, Clone)]
+pub struct LoginUser {
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub discord_sf: Option<String>,
+}
+
+#[derive(Object, Clone, Default)]
+pub struct LoginResponse {
+    pub token: String,
 }
 
 #[derive(Object, Clone)]

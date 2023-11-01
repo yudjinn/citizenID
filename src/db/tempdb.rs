@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use aws_sdk_dynamodb::{
     config::Region,
     operation::create_table::CreateTableOutput,
@@ -39,11 +41,30 @@ pub async fn init_db() -> Result<()> {
     let names = resp.table_names().unwrap_or_default();
     println!("Found tables: {:?}", names);
 
-    let reqs: Vec<String> = vec!["users".to_owned(), "applications".to_owned()];
+    let mut reqs: HashMap<String, Vec<String>> = HashMap::new();
+    // todo did this to also build indices
+    reqs.insert(
+        "users".to_owned(),
+        vec![
+            "id".to_owned(),
+            "rsi_id".to_owned(),
+            "email".to_owned(),
+            "discord_sf".to_owned(),
+        ],
+    );
+    reqs.insert(
+        "applications".to_owned(),
+        vec![
+            "id".to_owned(),
+            "rsi_id".to_owned(),
+            "email".to_owned(),
+            "discord_sf".to_owned(),
+        ],
+    );
 
     // make whatever is missing
     let l = reqs
-        .iter()
+        .keys()
         .filter(|&x| !names.contains(x))
         .cloned()
         .collect::<Vec<String>>();
@@ -53,6 +74,10 @@ pub async fn init_db() -> Result<()> {
         match create_table(client, &n, "id").await {
             Ok(o) => {
                 println!("Response:\n {:?}", o);
+                // todo create indices
+                // for i in reqs.get(&n) {
+                //     create_index(client, &n, &i).await;
+                // }
             }
             Err(e) => {
                 println!("Error:\n {}", e);
@@ -68,21 +93,19 @@ where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
-    println!("Getting item..");
-    let result = client
+    let req = client
         .query()
         .table_name(T::TABLE)
         .key_condition_expression(format!("#{} = :{}", column_name, column_name))
-        .expression_attribute_names(column_name, column_name)
+        .expression_attribute_names(format!("#{}", column_name), column_name)
         .expression_attribute_values(
             format!(":{}", column_name),
-            AttributeValue::N(value.to_owned()),
-        )
-        .send()
-        .await?;
-    println!("Get result: {:?}", result);
+            AttributeValue::S(value.to_owned()),
+        );
+    let result = req.send().await?;
 
     if let Some(items) = result.items {
+        println!("Items: {:?}", items);
         let t: Vec<T> = from_items(items)?;
         let ret: T = t.get(0).unwrap().clone();
         Ok(Some(ret))
@@ -96,15 +119,13 @@ where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
-    println!("Starting to put..");
 
     let i = to_item(item)?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
-    println!("Sending request: {:?}", request);
     let resp = request.send().await?;
-    println!("Received: {:?}", resp);
 
+    println!("Resp: {:?}", resp);
     let attrs = resp.attributes().unwrap();
 
     let obj: T = from_item(attrs.clone())?;

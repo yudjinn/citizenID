@@ -12,6 +12,7 @@ default = ["tempdb"]
 
 
 [dependencies]
+argon2 = "0.5.2"
 aws-config = "0.56.1"
 aws-sdk-dynamodb = { version = "0.33.0", features = ["rt-tokio"] }
 color-eyre = "0.6.2"
