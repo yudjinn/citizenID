@@ -1,5 +1,8 @@
 use poem::web::Path;
-use poem_openapi::{payload::Json, ApiResponse, OpenApi};
+use poem_openapi::{
+    payload::{Json, PlainText},
+    ApiResponse, OpenApi,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -31,6 +34,9 @@ enum UserResponse {
     UserExists,
 
     #[oai(status = 500)]
+    InternalServerErrorWithMessage(PlainText<String>),
+
+    #[oai(status = 500)]
     InternalServerError,
 
     #[oai(status = 500)]
@@ -39,14 +45,6 @@ enum UserResponse {
 
 #[OpenApi(prefix_path = "/user", tag = "ApiTags::User")]
 impl UserApi {
-    #[oai(path = "/", method = "get", operation_id = "Get All")]
-    async fn get_all(&self) -> UserResponse {
-        let user = User::new_from_email("test@mail.co", "password").await;
-        let mut vec = Vec::new();
-        vec.insert(0, user);
-        UserResponse::OkMulti(Json(vec))
-    }
-
     #[oai(path = "/:user_id", method = "get", operation_id = "Get Single")]
     async fn get_user(&self, user_id: Path<Uuid>) -> UserResponse {
         match db_handler::get_item_from_table_with_filter::<User>("id", &user_id.0.to_string())
@@ -67,10 +65,12 @@ impl UserApi {
                 let new = User::new_from_email(&user.email, &user.password).await;
                 match db_handler::put_item::<User>(new).await {
                     Ok(u) => UserResponse::UserCreated(Json(u)),
-                    Err(_) => UserResponse::InternalServerError,
+                    Err(e) => {
+                        UserResponse::InternalServerErrorWithMessage(PlainText(e.to_string()))
+                    }
                 }
             }
-            Err(_) => UserResponse::InternalServerError,
+            Err(e) => UserResponse::InternalServerErrorWithMessage(PlainText(e.to_string())),
         }
     }
     #[oai(path = "/:user_id", method = "put")]

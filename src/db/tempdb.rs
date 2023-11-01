@@ -50,7 +50,7 @@ pub async fn init_db() -> Result<()> {
     println!("Missing: {:?}", &l);
 
     for n in l {
-        match create_table(&client, &n, "id").await {
+        match create_table(client, &n, "id").await {
             Ok(o) => {
                 println!("Response:\n {:?}", o);
             }
@@ -68,6 +68,7 @@ where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
+    println!("Getting item..");
     let result = client
         .query()
         .table_name(T::TABLE)
@@ -79,6 +80,7 @@ where
         )
         .send()
         .await?;
+    println!("Get result: {:?}", result);
 
     if let Some(items) = result.items {
         let t: Vec<T> = from_items(items)?;
@@ -94,11 +96,14 @@ where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
+    println!("Starting to put..");
 
     let i = to_item(item)?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
+    println!("Sending request: {:?}", request);
     let resp = request.send().await?;
+    println!("Received: {:?}", resp);
 
     let attrs = resp.attributes().unwrap();
 
