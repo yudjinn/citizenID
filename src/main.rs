@@ -29,7 +29,7 @@ type RuntimeError = poem_lambda::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), RuntimeError> {
-    db_handler::init_db().await.unwrap();
+    db_handler::get_or_init().await;
     if std::env::var_os("RUST_LOG").is_none() {
         std::env::set_var("RUST_LOG", "poem=debug");
     }

@@ -21,16 +21,19 @@ pub enum UserStatus {
 #[derive(Object, Deserialize, Serialize, Clone)]
 pub struct User {
     #[oai(skip)]
-    pub id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discord_sf: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     #[oai(skip)]
     pub hashed_password: Option<String>,
     #[oai(skip)]
-    pub salt: Option<String>,
+    pub id: Uuid,
     #[oai(read_only)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rsi_id: Option<String>,
     #[oai(skip)]
-    pub discord_sf: Option<String>,
+    pub salt: Option<String>,
     #[oai(read_only)]
     pub sentinel: String,
     #[oai(read_only)]
@@ -74,7 +77,7 @@ impl User {
     }
 }
 impl<'a> Model<'a> for User {
-    const TABLE: &'a str = "users";
+    const TABLE: &'a str = "corvus-users";
 }
 
 #[derive(Object, Clone)]
@@ -109,14 +112,17 @@ pub enum AppStatus {
 }
 
 #[derive(Object, Deserialize, Serialize, Clone)]
-pub struct App {
+pub struct Application {
+    #[oai(skip)]
     pub id: Uuid,
+    #[oai(skip)]
     pub user_id: Uuid,
+    #[oai(read_only)]
     pub secret: String,
     pub callback_uris: Vec<String>,
     pub status: UserStatus,
 }
 
-impl<'a> Model<'a> for App {
-    const TABLE: &'a str = "applications";
+impl<'a> Model<'a> for Application {
+    const TABLE: &'a str = "corvus-apps";
 }

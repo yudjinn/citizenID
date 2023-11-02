@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use aws_sdk_dynamodb::{
-    config::Region,
     operation::create_table::CreateTableOutput,
     types::{
         AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
@@ -22,12 +21,7 @@ pub static LOCAL_DB: OnceCell<Client> = OnceCell::const_new();
 pub async fn get_or_init() -> &'static Client {
     LOCAL_DB
         .get_or_init(|| async {
-            let config = aws_config::from_env()
-                .profile_name("localstack")
-                .endpoint_url("http://localhost:8000")
-                .region(Region::new("us-east-1"))
-                .load()
-                .await;
+            let config = aws_config::from_env().profile_name("dev").load().await;
             Client::new(&config)
         })
         .await
@@ -88,13 +82,17 @@ pub async fn init_db() -> Result<()> {
     Ok(())
 }
 
-pub async fn get_item_from_table_with_filter<T>(column_name: &str, value: &str) -> Result<Option<T>>
+pub async fn get_item_from_table_with_filter_by_index<T>(
+    column_name: &str,
+    value: &str,
+) -> Result<Option<T>>
 where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
     let req = client
         .query()
+        .index_name(format!("{}-index", column_name))
         .table_name(T::TABLE)
         .key_condition_expression(format!("#{} = :{}", column_name, column_name))
         .expression_attribute_names(format!("#{}", column_name), column_name)
@@ -103,6 +101,29 @@ where
             AttributeValue::S(value.to_owned()),
         );
     let result = req.send().await?;
+
+    if let Some(items) = result.items {
+        let t: Vec<T> = from_items(items)?;
+        let ret: T = t.get(0).unwrap().clone();
+        Ok(Some(ret))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn get_item_from_table_with_filter_by_id<T>(value: &str) -> Result<Option<T>>
+where
+    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+{
+    let client = get_or_init().await;
+    let req = client
+        .query()
+        .table_name(T::TABLE)
+        .key_condition_expression("#{id} = :{id}")
+        .expression_attribute_names("#{id}", "id")
+        .expression_attribute_values(":id", AttributeValue::S(value.to_owned()));
+    let result = req.send().await?;
+    println!("Result: {:?}", result);
 
     if let Some(items) = result.items {
         println!("Items: {:?}", items);
@@ -120,24 +141,20 @@ where
 {
     let client = get_or_init().await;
 
-    let i = to_item(item)?;
+    let i = to_item(item.clone())?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
-    let resp = request.send().await?;
+    let _resp = request.send().await?;
 
-    println!("Resp: {:?}", resp);
-    let attrs = resp.attributes().unwrap();
-
-    let obj: T = from_item(attrs.clone())?;
-
-    Ok(obj)
+    Ok(item)
 }
 
 pub async fn update_item<T>(id: Uuid, item: T) -> Result<T>
 where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
-    if let Ok(Some(_)) = get_item_from_table_with_filter::<T>("id", &id.to_string()).await {
+    if let Ok(Some(_)) = get_item_from_table_with_filter_by_index::<T>("id", &id.to_string()).await
+    {
         let client = get_or_init().await;
 
         let i = to_item(item)?;
