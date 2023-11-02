@@ -1,5 +1,5 @@
-use poem::web::Path;
 use poem_openapi::{
+    param::Path,
     payload::{Json, PlainText},
     ApiResponse, OpenApi,
 };
