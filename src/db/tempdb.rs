@@ -104,11 +104,11 @@ where
 
     if let Some(items) = result.items {
         let t: Vec<T> = from_items(items)?;
-        let ret: T = t.get(0).unwrap().clone();
-        Ok(Some(ret))
-    } else {
-        Ok(None)
+        if let Some(ret) = t.get(0) {
+            return Ok(Some(ret.clone().try_into()?));
+        }
     }
+    Ok(None)
 }
 
 pub async fn get_item_from_table_with_filter_by_id<T>(value: &str) -> Result<Option<T>>

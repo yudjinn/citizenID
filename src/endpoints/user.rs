@@ -1,7 +1,9 @@
+use poem::{error::BadRequest, handler};
 use poem_openapi::{
+    auth::Bearer,
     param::Path,
     payload::{Json, PlainText},
-    ApiResponse, OpenApi,
+    ApiResponse, OAuthScopes, OpenApi, SecurityScheme,
 };
 use uuid::Uuid;
 
@@ -15,6 +17,7 @@ use crate::{
 pub struct UserApi;
 
 #[derive(ApiResponse)]
+#[allow(dead_code)]
 enum UserResponse {
     #[oai(status = 200)]
     OkMulti(Json<Vec<Application>>),
@@ -53,6 +56,27 @@ enum UserResponse {
     NotImplemented,
 }
 
+#[derive(OAuthScopes)]
+enum DiscordScopes {
+    // todo
+    #[oai(rename = "public_repo")]
+    PublicRepo,
+}
+
+/// Discord authorization
+///
+/// - client_id: `1170109958549934211`
+/// - client_secret: `Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae`
+#[derive(SecurityScheme)]
+#[oai(
+    ty = "oauth2",
+    flows(authorization_code(
+        authorization_url = "https://discord.com/oauth2/authorize",
+        token_url = "http://localhost:3000/discord",
+    ))
+)]
+struct DiscordAuthorization(Bearer);
+
 #[OpenApi(prefix_path = "/user", tag = "ApiTags::User")]
 impl UserApi {
     #[oai(path = "/:user_id", method = "get", operation_id = "Get Single")]
@@ -84,8 +108,8 @@ impl UserApi {
         }
     }
 
-    #[oai(path = "/login", method = "post", operation_id = "Login")]
-    async fn login(&self, login: Json<LoginUser>) -> UserResponse {
+    #[oai(path = "/login", method = "post", operation_id = "Login via Email")]
+    async fn login_with_email(&self, login: Json<LoginUser>) -> UserResponse {
         match login.0 {
             LoginUser {
                 email: Some(email),

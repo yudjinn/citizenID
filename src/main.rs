@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use color_eyre::Result;
-use endpoints::user::UserApi;
-use poem::Route;
+use endpoints::{login::oauth_token_url_proxy_discord, user::UserApi};
+use poem::session::{CookieConfig, CookieSession};
 use poem::{listener::TcpListener, Server};
+use poem::{EndpointExt, Route};
 use poem_openapi::{payload::PlainText, OpenApi, OpenApiService};
 
 pub mod db;
@@ -40,7 +43,17 @@ async fn main() -> Result<(), RuntimeError> {
         OpenApiService::new((Api, UserApi), "CitizenID", "1.0").server("http://localhost:3000/api");
     let ui = api_service.swagger_ui();
 
-    let app = Route::new().nest("/api", api_service).nest("/", ui);
+    let session = CookieSession::new(
+        CookieConfig::default()
+            .max_age(Some(Duration::from_secs(60 * 5)))
+            .name("CORVUS_SESS"),
+    );
+
+    let app = Route::new()
+        .nest("/api", api_service)
+        .at("/discord", oauth_token_url_proxy_discord)
+        .nest("/", ui)
+        .with(session);
 
     #[cfg(not(feature = "lambda"))]
     let server = Server::new(TcpListener::bind("127.0.0.1:3000")).run(app);
