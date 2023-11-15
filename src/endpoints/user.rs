@@ -1,24 +1,23 @@
-use poem::{error::BadRequest, handler};
 use poem_openapi::{
     auth::Bearer,
-    param::Path,
     payload::{Json, PlainText},
     ApiResponse, OAuthScopes, OpenApi, SecurityScheme,
 };
-use uuid::Uuid;
 
 use crate::{
     db_handler,
     endpoints::ApiTags,
-    model::{Application, CreateUserEmail, LoginResponse, LoginUser, UpdateUser, User},
-    utils::{check_password, hash_password},
+    model::{Application, CreateUserEmail, LoginResponse, UpdateUser, User},
+    utils::hash_password,
 };
+
+use super::login::CorvusApiKeyAuthorization;
 
 pub struct UserApi;
 
 #[derive(ApiResponse)]
 #[allow(dead_code)]
-enum UserResponse {
+pub enum UserResponse {
     #[oai(status = 200)]
     OkMulti(Json<Vec<Application>>),
 
@@ -80,91 +79,13 @@ struct DiscordAuthorization(Bearer);
 #[OpenApi(prefix_path = "/user", tag = "ApiTags::User")]
 impl UserApi {
     #[oai(path = "/:user_id", method = "get", operation_id = "Get Single")]
-    async fn get_user(&self, user_id: Path<Uuid>) -> UserResponse {
-        match db_handler::get_item_from_table_with_filter_by_id::<User>(&user_id.0.to_string())
+    async fn get_user(&self, auth: CorvusApiKeyAuthorization) -> UserResponse {
+        match db_handler::get_item_from_table_with_filter_by_id::<User>(&auth.0.id.to_string())
             .await
         {
             Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
             Ok(None) => UserResponse::NotFound,
             Err(e) => UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e))),
-        }
-    }
-
-    #[oai(
-        path = "/email/:email",
-        method = "get",
-        operation_id = "Get Single by Email"
-    )]
-    async fn get_user_by_email(&self, email: Path<String>) -> UserResponse {
-        match db_handler::get_item_from_table_with_filter_by_index::<User>(
-            "email",
-            &email.0.to_string(),
-        )
-        .await
-        {
-            Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
-            Ok(None) => UserResponse::NotFound,
-            Err(e) => UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e))),
-        }
-    }
-
-    #[oai(path = "/login", method = "post", operation_id = "Login via Email")]
-    async fn login_with_email(&self, login: Json<LoginUser>) -> UserResponse {
-        match login.0 {
-            LoginUser {
-                email: Some(email),
-                password: Some(password),
-                ..
-            } => {
-                match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
-                    .await
-                {
-                    Ok(Some(user)) => {
-                        if user.hashed_password.is_none() || user.salt.is_none() {
-                            return UserResponse::Unauthorized;
-                        }
-                        if let Ok(v) = check_password(
-                            &password,
-                            &user.salt.unwrap(),
-                            &user.hashed_password.unwrap(),
-                        )
-                        .await
-                        {
-                            //todo create session/token
-                            if v {
-                                let l = LoginResponse::default();
-                                UserResponse::LoginSuccess(Json(l))
-                            } else {
-                                UserResponse::Unauthorized
-                            }
-                        } else {
-                            UserResponse::InternalServerError
-                        }
-                    }
-                    Ok(None) => UserResponse::NotFound,
-                    Err(e) => {
-                        UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
-                    }
-                }
-            }
-            LoginUser {
-                discord_sf: Some(discord_sf),
-                ..
-            } => {
-                match db_handler::get_item_from_table_with_filter_by_index::<User>(
-                    "discord_sf",
-                    &discord_sf,
-                )
-                .await
-                {
-                    Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
-                    Ok(None) => UserResponse::NotFound,
-                    Err(e) => {
-                        UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
-                    }
-                }
-            }
-            _ => UserResponse::MissingData,
         }
     }
 
@@ -195,11 +116,15 @@ impl UserApi {
     }
 
     #[oai(path = "/:user_id", method = "put")]
-    async fn update_user(&self, user_id: Path<Uuid>, user: Json<UpdateUser>) -> UserResponse {
+    async fn update_user(
+        &self,
+        auth: CorvusApiKeyAuthorization,
+        user: Json<UpdateUser>,
+    ) -> UserResponse {
         // check the item doesnt already exist
         match db_handler::get_item_from_table_with_filter_by_index::<User>(
             "id",
-            &user_id.0.to_string(),
+            &auth.0.id.to_string(),
         )
         .await
         {
@@ -215,7 +140,7 @@ impl UserApi {
                         return UserResponse::InternalServerError;
                     }
                 }
-                match db_handler::update_item::<User>(user_id.0, obj).await {
+                match db_handler::update_item::<User>(auth.0.id, obj).await {
                     Ok(u) => UserResponse::UserUpdated(Json(u)),
                     Err(_) => UserResponse::InternalServerError,
                 }

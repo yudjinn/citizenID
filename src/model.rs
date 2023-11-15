@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use poem_openapi::{Enum, Object};
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,39 @@ use crate::utils::hash_password;
 
 pub trait Model<'a> {
     const TABLE: &'a str;
+}
+
+#[derive(Enum, Default, Serialize, Deserialize, Clone)]
+pub enum TokenVersion {
+    #[default]
+    V1,
+}
+
+#[derive(Object, Deserialize, Serialize, Clone)]
+pub struct Token {
+    pub user_id: Uuid,
+    pub family: Uuid,
+    pub valid: bool,
+    pub refresh_token_expire_dt: DateTime<Utc>,
+    pub version: TokenVersion,
+}
+
+impl Token {
+    pub async fn default(user_id: Uuid) -> Self {
+        Token {
+            user_id,
+            family: Uuid::new_v4(),
+            valid: true,
+            refresh_token_expire_dt: Utc::now(),
+            version: TokenVersion::default(),
+        }
+    }
+}
+
+#[derive(Object, Deserialize, Serialize, Clone)]
+pub struct AuthLogin {
+    pub access_token: String,
+    pub refresh_token: String,
 }
 
 #[derive(Enum, Default, Serialize, Deserialize, Clone)]
@@ -27,7 +61,6 @@ pub struct User {
     pub email: Option<String>,
     #[oai(skip)]
     pub hashed_password: Option<String>,
-    #[oai(skip)]
     pub id: Uuid,
     #[oai(read_only)]
     #[serde(skip_serializing_if = "Option::is_none")]

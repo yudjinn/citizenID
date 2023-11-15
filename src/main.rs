@@ -1,20 +1,22 @@
-use std::time::Duration;
-
 use color_eyre::Result;
+use endpoints::login::LoginApi;
 use endpoints::{login::oauth_token_url_proxy_discord, user::UserApi};
-use poem::session::{CookieConfig, CookieSession};
+use hmac::{Hmac, Mac};
 use poem::{listener::TcpListener, Server};
 use poem::{EndpointExt, Route};
 use poem_openapi::{payload::PlainText, OpenApi, OpenApiService};
 
 pub mod db;
 pub use db::db as db_handler;
+use sha2::Sha256;
 pub mod endpoints;
 pub mod error;
 pub mod model;
 pub mod utils;
 
 struct Api;
+
+pub const SERVER_KEY: &[u8] = b"123456";
 
 #[OpenApi]
 impl Api {
@@ -39,21 +41,17 @@ async fn main() -> Result<(), RuntimeError> {
 
     tracing_subscriber::fmt::init();
 
-    let api_service =
-        OpenApiService::new((Api, UserApi), "CitizenID", "1.0").server("http://localhost:3000/api");
+    let api_service = OpenApiService::new((Api, UserApi, LoginApi), "CitizenID", "1.0")
+        .server("http://localhost:3000/api");
     let ui = api_service.swagger_ui();
 
-    let session = CookieSession::new(
-        CookieConfig::default()
-            .max_age(Some(Duration::from_secs(60 * 5)))
-            .name("CORVUS_SESS"),
-    );
+    let server_key = Hmac::<Sha256>::new_from_slice(SERVER_KEY).expect("valid server key");
 
     let app = Route::new()
         .nest("/api", api_service)
         .at("/discord", oauth_token_url_proxy_discord)
         .nest("/", ui)
-        .with(session);
+        .data(server_key);
 
     #[cfg(not(feature = "lambda"))]
     let server = Server::new(TcpListener::bind("127.0.0.1:3000")).run(app);

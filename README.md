@@ -13,3 +13,7 @@ region = us-east-1
 aws_access_key_id = AKIDLOCALSTACK
 aws_secret_access_key = localstacksecret
 ```
+
+Test User:
+test@email.co
+password

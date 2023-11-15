@@ -119,14 +119,12 @@ where
     let req = client
         .query()
         .table_name(T::TABLE)
-        .key_condition_expression("#{id} = :{id}")
-        .expression_attribute_names("#{id}", "id")
+        .key_condition_expression("#id = :id")
+        .expression_attribute_names("#id", "id")
         .expression_attribute_values(":id", AttributeValue::S(value.to_owned()));
     let result = req.send().await?;
-    println!("Result: {:?}", result);
 
     if let Some(items) = result.items {
-        println!("Items: {:?}", items);
         let t: Vec<T> = from_items(items)?;
         let ret: T = t.get(0).unwrap().clone();
         Ok(Some(ret))
