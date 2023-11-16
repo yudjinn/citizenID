@@ -126,11 +126,6 @@ pub struct LoginUser {
     pub discord_sf: Option<String>,
 }
 
-#[derive(Object, Clone, Default)]
-pub struct LoginResponse {
-    pub token: String,
-}
-
 #[derive(Object, Clone)]
 pub struct CreateUserEmail {
     pub email: String,

@@ -1,16 +1,16 @@
 use hmac::Hmac;
 use jwt::{SignWithKey, VerifyWithKey};
-use poem::{error::BadRequest, handler, web::Data, Endpoint, IntoResponse, Request};
+use poem::{error::BadRequest, handler, web::Data, Request};
 use poem_openapi::{
     auth::ApiKey,
     payload::{Json, PlainText},
-    OpenApi, SecurityScheme,
+    ApiResponse, OpenApi, SecurityScheme,
 };
 use sha2::Sha256;
 
-use crate::model::{AuthLogin, LoginUser, User};
+use crate::model::AuthLogin;
+use crate::model::{LoginUser, User};
 use crate::{db_handler, utils::check_password};
-use crate::{endpoints::user::UserResponse, model::LoginResponse};
 
 /// ApiKey authorization
 #[derive(SecurityScheme)]
@@ -30,6 +30,28 @@ async fn api_checker(req: &Request, api_key: ApiKey) -> Option<User> {
     VerifyWithKey::<User>::verify_with_key(api_key.key.as_str(), server_key).ok()
 }
 
+#[derive(ApiResponse)]
+#[allow(dead_code)]
+pub enum LoginResponse {
+    #[oai(status = 200)]
+    LoginSuccess(Json<AuthLogin>),
+
+    #[oai(status = 403)]
+    Unauthorized,
+
+    #[oai(status = 422)]
+    MissingData,
+
+    #[oai(status = 500)]
+    InternalServerErrorWithMessage(PlainText<String>),
+
+    #[oai(status = 500)]
+    InternalServerError,
+
+    #[oai(status = 500)]
+    NotImplemented,
+}
+
 pub struct LoginApi;
 
 #[OpenApi]
@@ -39,7 +61,7 @@ impl LoginApi {
         &self,
         server_key: Data<&ServerKey>,
         login: Json<LoginUser>,
-    ) -> UserResponse {
+    ) -> LoginResponse {
         match login.0 {
             LoginUser {
                 email: Some(email),
@@ -51,7 +73,7 @@ impl LoginApi {
                 {
                     Ok(Some(user)) => {
                         if user.hashed_password.is_none() || user.salt.is_none() {
-                            return UserResponse::Unauthorized;
+                            return LoginResponse::Unauthorized;
                         }
                         if let Ok(v) = check_password(
                             &password,
@@ -60,64 +82,55 @@ impl LoginApi {
                         )
                         .await
                         {
-                            //todo create session/token
                             if v {
+                                //todo create session/token
                                 if let Ok(l) = user.sign_with_key(server_key.0) {
-                                    UserResponse::LoginSuccess(Json(LoginResponse { token: l }))
+                                    LoginResponse::LoginSuccess(Json(AuthLogin {
+                                        access_token: todo!(),
+                                        refresh_token: todo!(),
+                                    }))
                                 } else {
-                                    UserResponse::InternalServerError
+                                    LoginResponse::InternalServerError
                                 }
                             } else {
-                                UserResponse::Unauthorized
+                                LoginResponse::Unauthorized
                             }
                         } else {
-                            UserResponse::InternalServerError
+                            LoginResponse::InternalServerError
                         }
                     }
-                    Ok(None) => UserResponse::NotFound,
+                    Ok(None) => LoginResponse::Unauthorized,
                     Err(e) => {
-                        UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
+                        LoginResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
                     }
                 }
             }
-            _ => UserResponse::MissingData,
+            _ => LoginResponse::MissingData,
         }
     }
 
-    async fn login_with_discord(&self) -> UserResponse {
-        //     LoginUser {
-        //         discord_sf: Some(discord_sf),
-        //         ..
-        //     } => {
-        //         match db_handler::get_item_from_table_with_filter_by_index::<User>(
-        //             "discord_sf",
-        //             &discord_sf,
-        //         )
-        //         .await
-        //         {
-        //             Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
-        //             Ok(None) => UserResponse::NotFound,
-        //             Err(e) => {
-        //                 UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
-        //             }
-        //         }
-        //     }
-        //     _ => UserResponse::MissingData,
-        // }
-        todo!()
-    }
-}
-
-async fn check_session<E: Endpoint>(next: E, req: Request) -> poem::Result<poem::Response> {
-    let res = next.call(req).await;
-
-    match res {
-        Ok(resp) => {
-            let resp = resp.into_response();
-            Ok(resp)
-        }
-        Err(err) => Err(err),
-    }
+    // async fn login_with_discord(&self) -> UserResponse {
+    //     LoginUser {
+    //         discord_sf: Some(discord_sf),
+    //         ..
+    //     } => {
+    //         match db_handler::get_item_from_table_with_filter_by_index::<User>(
+    //             "discord_sf",
+    //             &discord_sf,
+    //         )
+    //         .await
+    //         {
+    //             Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
+    //             Ok(None) => UserResponse::NotFound,
+    //             Err(e) => {
+    //                 UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
+    //             }
+    //         }
+    //     }
+    //     _ => UserResponse::MissingData,
+    // }
+    //     todo!()
+    // }
 }
 
 #[handler]

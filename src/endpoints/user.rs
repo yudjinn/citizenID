@@ -1,13 +1,12 @@
 use poem_openapi::{
-    auth::Bearer,
     payload::{Json, PlainText},
-    ApiResponse, OAuthScopes, OpenApi, SecurityScheme,
+    ApiResponse, OpenApi,
 };
 
 use crate::{
     db_handler,
     endpoints::ApiTags,
-    model::{Application, CreateUserEmail, LoginResponse, UpdateUser, User},
+    model::{CreateUserEmail, UpdateUser, User},
     utils::hash_password,
 };
 
@@ -19,13 +18,7 @@ pub struct UserApi;
 #[allow(dead_code)]
 pub enum UserResponse {
     #[oai(status = 200)]
-    OkMulti(Json<Vec<Application>>),
-
-    #[oai(status = 200)]
     Ok(Json<User>),
-
-    #[oai(status = 200)]
-    LoginSuccess(Json<LoginResponse>),
 
     #[oai(status = 201)]
     UserCreated(Json<User>),
@@ -55,26 +48,26 @@ pub enum UserResponse {
     NotImplemented,
 }
 
-#[derive(OAuthScopes)]
-enum DiscordScopes {
-    // todo
-    #[oai(rename = "public_repo")]
-    PublicRepo,
-}
+// #[derive(OAuthScopes)]
+// enum DiscordScopes {
+//     // todo
+//     #[oai(rename = "public_repo")]
+//     PublicRepo,
+// }
 
 /// Discord authorization
 ///
 /// - client_id: `1170109958549934211`
 /// - client_secret: `Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae`
-#[derive(SecurityScheme)]
-#[oai(
-    ty = "oauth2",
-    flows(authorization_code(
-        authorization_url = "https://discord.com/oauth2/authorize",
-        token_url = "http://localhost:3000/discord",
-    ))
-)]
-struct DiscordAuthorization(Bearer);
+// #[derive(SecurityScheme)]
+// #[oai(
+//     ty = "oauth2",
+//     flows(authorization_code(
+//         authorization_url = "https://discord.com/oauth2/authorize",
+//         token_url = "http://localhost:3000/discord",
+//     ))
+// )]
+// struct DiscordAuthorization(Bearer);
 
 #[OpenApi(prefix_path = "/user", tag = "ApiTags::User")]
 impl UserApi {
