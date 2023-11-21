@@ -1,163 +1,182 @@
-use hmac::Hmac;
-use jwt::{SignWithKey, VerifyWithKey};
-use poem::{error::BadRequest, handler, web::Data, Request};
-use poem_openapi::{
-    auth::ApiKey,
-    payload::{Json, PlainText},
-    ApiResponse, OpenApi, SecurityScheme,
-};
-use sha2::Sha256;
+use anyhow::Result;
+use axum::body::Body;
+use axum::http::Request;
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
+use axum::routing::post;
+use axum::Router;
+use axum::{extract, Json};
+use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
+use serde::{Deserialize, Serialize};
 
-use crate::model::AuthLogin;
-use crate::model::{LoginUser, User};
+use crate::model::{LoginUser, RefreshToken, RefreshTokenRequest, User};
+use crate::utils::{generate_token_pair, ApiResponse};
+use crate::KEYS;
 use crate::{db_handler, utils::check_password};
 
-/// ApiKey authorization
-#[derive(SecurityScheme)]
-#[oai(
-    ty = "api_key",
-    key_name = "X-API-Key",
-    key_in = "header",
-    checker = "api_checker"
-)]
-pub struct CorvusApiKeyAuthorization(pub User);
-// pub struct CorvusApiKeyAuthorization(pub AuthLogin);
+// async fn api_checker(req: &Request, api_key: ApiKey) -> Option<User> {
+//     let server_key = req.data::<ServerKey>().unwrap();
+//     VerifyWithKey::<User>::verify_with_key(api_key.key.as_str(), server_key).ok()
+// }
 
-type ServerKey = Hmac<Sha256>;
-
-async fn api_checker(req: &Request, api_key: ApiKey) -> Option<User> {
-    let server_key = req.data::<ServerKey>().unwrap();
-    VerifyWithKey::<User>::verify_with_key(api_key.key.as_str(), server_key).ok()
+pub fn get_router() -> Router {
+    Router::new()
+        .route("/email", post(login_with_email))
+        .route("/token", post(get_new_token))
 }
 
-#[derive(ApiResponse)]
-#[allow(dead_code)]
-pub enum LoginResponse {
-    #[oai(status = 200)]
-    LoginSuccess(Json<AuthLogin>),
-
-    #[oai(status = 403)]
-    Unauthorized,
-
-    #[oai(status = 422)]
-    MissingData,
-
-    #[oai(status = 500)]
-    InternalServerErrorWithMessage(PlainText<String>),
-
-    #[oai(status = 500)]
-    InternalServerError,
-
-    #[oai(status = 500)]
-    NotImplemented,
-}
-
-pub struct LoginApi;
-
-#[OpenApi]
-impl LoginApi {
-    #[oai(path = "/login", method = "post", operation_id = "Login via Email")]
-    async fn login_with_email(
-        &self,
-        server_key: Data<&ServerKey>,
-        login: Json<LoginUser>,
-    ) -> LoginResponse {
-        match login.0 {
-            LoginUser {
-                email: Some(email),
-                password: Some(password),
-                ..
-            } => {
-                match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
-                    .await
-                {
-                    Ok(Some(user)) => {
-                        if user.hashed_password.is_none() || user.salt.is_none() {
-                            return LoginResponse::Unauthorized;
-                        }
-                        if let Ok(v) = check_password(
-                            &password,
-                            &user.salt.clone().unwrap(),
-                            &user.hashed_password.clone().unwrap(),
-                        )
-                        .await
-                        {
-                            if v {
-                                //todo create session/token
-                                if let Ok(l) = user.sign_with_key(server_key.0) {
-                                    LoginResponse::LoginSuccess(Json(AuthLogin {
-                                        access_token: todo!(),
-                                        refresh_token: todo!(),
-                                    }))
-                                } else {
-                                    LoginResponse::InternalServerError
-                                }
-                            } else {
-                                LoginResponse::Unauthorized
-                            }
-                        } else {
-                            LoginResponse::InternalServerError
-                        }
+#[axum::debug_handler]
+async fn login_with_email(
+    extract::Json(login): extract::Json<LoginUser>,
+) -> Result<Json<AuthResponse>, impl IntoResponse> {
+    match login {
+        LoginUser {
+            email: Some(email),
+            password: Some(password),
+            ..
+        } => {
+            match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
+                .await
+            {
+                Ok(Some(user)) => {
+                    if user.hashed_password.is_none() || user.salt.is_none() {
+                        return Err(ApiResponse::Unauthorized);
                     }
-                    Ok(None) => LoginResponse::Unauthorized,
-                    Err(e) => {
-                        LoginResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
+                    if let Ok(v) = check_password(
+                        &password,
+                        &user.salt.clone().unwrap(),
+                        &user.hashed_password.clone().unwrap(),
+                    )
+                    .await
+                    {
+                        if v {
+                            let (r, a) = generate_token_pair(user.id)
+                                .await
+                                .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+                            let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
+                                .map_err(|_| ApiResponse::InternalServerError)?;
+                            let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                                .map_err(|_| ApiResponse::InternalServerError)?;
+
+                            Ok(Json(AuthResponse {
+                                auth_token: signed_auth_token,
+                                refresh_token: signed_ref_token,
+                            }))
+                        } else {
+                            Err(ApiResponse::Unauthorized)
+                        }
+                    } else {
+                        Err(ApiResponse::InternalServerError)
                     }
                 }
+                Ok(None) => Err(ApiResponse::Unauthorized),
+                Err(_) => Err(ApiResponse::InternalServerError),
             }
-            _ => LoginResponse::MissingData,
         }
+        _ => Err(ApiResponse::MissingData),
     }
-
-    // async fn login_with_discord(&self) -> UserResponse {
-    //     LoginUser {
-    //         discord_sf: Some(discord_sf),
-    //         ..
-    //     } => {
-    //         match db_handler::get_item_from_table_with_filter_by_index::<User>(
-    //             "discord_sf",
-    //             &discord_sf,
-    //         )
-    //         .await
-    //         {
-    //             Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
-    //             Ok(None) => UserResponse::NotFound,
-    //             Err(e) => {
-    //                 UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
-    //             }
-    //         }
-    //     }
-    //     _ => UserResponse::MissingData,
-    // }
-    //     todo!()
-    // }
 }
 
-#[handler]
-pub async fn oauth_token_url_proxy_discord(
-    req: &poem::Request,
-    body: poem::Body,
-) -> poem::Result<poem::Response> {
-    let cli = reqwest::Client::new();
-    let body = body.into_vec().await?;
-    let resp = cli
-        .request(
-            req.method().clone(),
-            format!(
-                "https://discord.com/api/oauth2/token?{}",
-                req.uri().query().unwrap_or_default()
-            ),
-        )
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .headers(req.headers().clone())
-        .body(body)
-        .send()
+async fn get_new_token(
+    extract::Json(token): extract::Json<RefreshTokenRequest>,
+) -> Result<Json<AuthResponse>, impl IntoResponse> {
+    let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
-        .map_err(BadRequest)?;
+        .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+    match db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(&token.id.to_string())
+        .await
+    {
+        Ok(Some(mut token)) => {
+            if token.valid {
+                let (r, a) = generate_token_pair(token.user_id)
+                    .await
+                    .map_err(|_| ApiResponse::InternalServerError)?;
+                token
+                    .invalidate()
+                    .await
+                    .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
 
-    let mut r = poem::Response::default();
-    r.set_status(resp.status());
-    *r.headers_mut() = resp.headers().clone();
-    r.set_body(resp.bytes().await.map_err(BadRequest)?);
-    Ok(r)
+                let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
+                    .map_err(|_| ApiResponse::InternalServerError)?;
+                let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                    .map_err(|_| ApiResponse::InternalServerError)?;
+
+                Ok(Json(AuthResponse {
+                    auth_token: signed_auth_token,
+                    refresh_token: signed_ref_token,
+                }))
+            } else {
+                return Err(ApiResponse::Unauthorized);
+            }
+        }
+        Ok(None) => Err(ApiResponse::Unauthorized),
+        Err(_) => Err(ApiResponse::InternalServerError),
+    }
+}
+
+pub async fn auth_middleware(
+    mut req: Request<Body>,
+    next: Next<Body>,
+) -> Result<Response, impl IntoResponse> {
+    // let headers = req.headers_mut();
+    let auth_header = req
+        .headers()
+        .get("auth_token")
+        .and_then(|h| h.to_str().ok());
+
+    let auth_header = if let Some(auth_header) = auth_header {
+        auth_header
+    } else {
+        return Err(ApiResponse::Unauthorized);
+    };
+
+    if let Ok(Some(current_user)) = User::get_auth_user(auth_header).await {
+        req.extensions_mut().insert(current_user);
+        Ok(next.run(req).await)
+    } else {
+        Err(ApiResponse::Unauthorized)
+    }
+}
+
+// async fn login_with_discord(&self) -> UserResponse {
+//     LoginUser {
+//         discord_sf: Some(discord_sf),
+//         ..
+//     } => {
+//         match db_handler::get_item_from_table_with_filter_by_index::<User>(
+//             "discord_sf",
+//             &discord_sf,
+//         )
+//         .await
+//         {
+//             Ok(Some(user)) => UserResponse::Ok(Json(user.clone())),
+//             Ok(None) => UserResponse::NotFound,
+//             Err(e) => {
+//                 UserResponse::InternalServerErrorWithMessage(PlainText(format!("{:?}", e)))
+//             }
+//         }
+//     }
+//     _ => UserResponse::MissingData,
+// }
+//     todo!()
+// }
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct AuthResponse {
+    auth_token: String,
+    refresh_token: String,
+}
+
+pub struct Keys {
+    pub encoding: EncodingKey,
+    pub decoding: DecodingKey,
+}
+
+impl Keys {
+    pub fn new(secret: &[u8]) -> Self {
+        Self {
+            encoding: EncodingKey::from_secret(secret),
+            decoding: DecodingKey::from_secret(secret),
+        }
+    }
 }
