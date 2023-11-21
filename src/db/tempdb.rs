@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::{Error, Result};
 use aws_sdk_dynamodb::{
     operation::create_table::CreateTableOutput,
     types::{
@@ -8,9 +9,8 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use color_eyre::{Report, Result};
 use serde::{Deserialize, Serialize};
-use serde_dynamo::aws_sdk_dynamodb_0_33::{from_item, from_items, to_item};
+use serde_dynamo::aws_sdk_dynamodb_0_33::{from_items, to_item};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
@@ -111,6 +111,35 @@ where
     Ok(None)
 }
 
+pub async fn get_all_from_table_with_filter_by_index<T>(
+    column_name: &str,
+    value: &str,
+) -> Result<Vec<T>>
+where
+    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+{
+    let client = get_or_init().await;
+    let req = client
+        .query()
+        .index_name(format!("{}-index", column_name))
+        .table_name(T::TABLE)
+        .key_condition_expression(format!("#{} = :{}", column_name, column_name))
+        .expression_attribute_names(format!("#{}", column_name), column_name)
+        .expression_attribute_values(
+            format!(":{}", column_name),
+            AttributeValue::S(value.to_owned()),
+        );
+    let result = req.send().await?;
+
+    match result.items {
+        Some(items) => {
+            let t: Vec<T> = from_items(items)?;
+            Ok(t)
+        }
+        None => Ok(Vec::new()),
+    }
+}
+
 pub async fn get_item_from_table_with_filter_by_id<T>(value: &str) -> Result<Option<T>>
 where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
@@ -126,7 +155,14 @@ where
 
     if let Some(items) = result.items {
         let t: Vec<T> = from_items(items)?;
-        let ret: T = t.get(0).unwrap().clone();
+        let ret: T = t
+            .get(0)
+            .ok_or(Error::msg(format!(
+                "Item [{}]<{}> was not found.",
+                std::any::type_name::<T>(),
+                value
+            )))?
+            .clone();
         Ok(Some(ret))
     } else {
         Ok(None)
@@ -147,27 +183,37 @@ where
     Ok(item)
 }
 
+pub async fn delete_item<T>(id: Uuid) -> Result<()>
+where
+    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+{
+    let client = get_or_init().await;
+
+    let request = client
+        .delete_item()
+        .table_name(T::TABLE)
+        .key(id, AttributeValue::S(id.into()));
+    let _resp = request.send().await?;
+
+    Ok(())
+}
+
 pub async fn update_item<T>(id: Uuid, item: T) -> Result<T>
 where
     T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
 {
-    if let Ok(Some(_)) = get_item_from_table_with_filter_by_index::<T>("id", &id.to_string()).await
-    {
+    if let Ok(Some(_)) = get_item_from_table_with_filter_by_id::<T>(&id.to_string()).await {
         let client = get_or_init().await;
 
-        let i = to_item(item)?;
+        let i = to_item(item.clone())?;
 
         let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
-        let resp = request.send().await?;
+        let _resp = request.send().await?;
 
-        let attrs = resp.attributes().unwrap();
-
-        let obj: T = from_item(attrs.clone())?;
-
-        Ok(obj)
+        Ok(item)
     } else {
-        Err(Report::msg(format!(
-            "Item [{}]-{} was not found.",
+        Err(Error::msg(format!(
+            "Item [{}]<{}> was not found.",
             std::any::type_name::<T>(),
             id
         )))
@@ -203,6 +249,6 @@ pub async fn create_table(client: &Client, table: &str, key: &str) -> Result<Cre
 
     match create_table_response {
         Ok(out) => Ok(out),
-        Err(e) => Err(Report::msg(format!("Could not create table: {}", e))),
+        Err(e) => Err(Error::msg(format!("Could not create table: {}", e))),
     }
 }
