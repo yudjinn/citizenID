@@ -51,7 +51,7 @@ impl RefreshToken {
 
         let res = db_handler::put_item::<Self>(r).await?;
 
-        return Ok(res);
+        Ok(res)
     }
 
     pub async fn from_header_str(s: &str) -> Result<Self> {
@@ -63,7 +63,10 @@ impl RefreshToken {
 
     pub async fn invalidate(&mut self) -> Result<()> {
         self.valid = false;
-        if let Ok(_) = db_handler::update_item(self.id, self.to_owned()).await {
+        if db_handler::update_item(self.id, self.to_owned())
+            .await
+            .is_ok()
+        {
             Ok(())
         } else {
             Err(anyhow::Error::msg("Failed to invalidate."))
@@ -88,7 +91,7 @@ impl RefreshToken {
             db_handler::get_item_from_table_with_filter_by_id::<Self>(&id.to_string()).await
         {
             token.valid = false;
-            if let Ok(_) = db_handler::update_item(id, token).await {
+            if db_handler::update_item(id, token).await.is_ok() {
                 Ok(())
             } else {
                 Err(anyhow::Error::msg("Failed to invalidate."))
@@ -117,9 +120,9 @@ impl RefreshToken {
                 return false;
             }
 
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }
@@ -149,7 +152,7 @@ impl AuthToken {
     }
 
     pub async fn is_valid(&self) -> bool {
-        return RefreshToken::is_valid_static(self.family).await;
+        RefreshToken::is_valid_static(self.family).await
     }
 }
 
@@ -241,10 +244,26 @@ impl User {
     }
 
     pub async fn get_auth_user(auth_token: &str) -> Result<Option<Self>> {
-        if let Ok(at) = AuthToken::from_header_str(auth_token).await {
-            db_handler::get_item_from_table_with_filter_by_id::<User>(&at.user_id.to_string()).await
-        } else {
-            Err(anyhow::Error::msg("Could not parse token."))
+        match AuthToken::from_header_str(auth_token).await {
+            Ok(at) => {
+                if let Ok(Some(token)) = db_handler::get_item_from_table_with_filter_by_id::<
+                    RefreshToken,
+                >(&at.family.to_string())
+                .await
+                {
+                    if token.valid {
+                        db_handler::get_item_from_table_with_filter_by_id::<User>(
+                            &token.user_id.to_string(),
+                        )
+                        .await
+                    } else {
+                        Err(anyhow::Error::msg("Token is invalid."))
+                    }
+                } else {
+                    Err(anyhow::Error::msg("Token not found."))
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 }

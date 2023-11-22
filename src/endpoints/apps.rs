@@ -38,7 +38,7 @@ async fn create_app(
 ) -> Result<Json<Application>, impl IntoResponse> {
     let new = Application::new_from_template(&app, current_user.id).await;
     match db_handler::put_item::<Application>(new).await {
-        Ok(u) => Ok(Json(u.into())),
+        Ok(u) => Ok(Json(u)),
         Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
     }
 }

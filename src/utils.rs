@@ -40,7 +40,7 @@ pub async fn check_password(password: &str, salt: &str, db_pass: &str) -> Result
 pub async fn generate_token_pair(user_id: Uuid) -> Result<(RefreshToken, AuthToken)> {
     let r = RefreshToken::default(user_id).await?;
     let a = AuthToken::default(&r).await;
-    return Ok((r, a));
+    Ok((r, a))
 }
 
 #[allow(dead_code)]
@@ -67,7 +67,7 @@ impl IntoResponse for ApiResponse {
             ),
             ApiResponse::InternalServerErrorWithMessage(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Body::from(format!("Something happened: {}", e)),
+                Body::from(format!("An error occurred: {}", e)),
             ),
             ApiResponse::NotImplemented => (StatusCode::NOT_IMPLEMENTED, Body::empty()),
             ApiResponse::NotFound => (StatusCode::NOT_FOUND, Body::from("Not found.")),

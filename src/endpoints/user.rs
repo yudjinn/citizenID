@@ -92,9 +92,9 @@ async fn update_user(
                 }
             }
             if invalidate {
-                let _r = RefreshToken::invalidate_all_for_user(current_user.id)
+                RefreshToken::invalidate_all_for_user(current_user.id)
                     .await
-                    .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
             }
             match db_handler::update_item::<User>(current_user.id, obj).await {
                 Ok(u) => Ok(Json(u.into())),

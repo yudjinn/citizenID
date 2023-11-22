@@ -40,7 +40,7 @@ async fn main() -> Result<(), RuntimeError> {
         .route("/ping", get(ping))
         .nest("/user", endpoints::user::get_router())
         .nest("/applications", endpoints::apps::get_router())
-        .nest("/login", endpoints::login::get_router());
+        .nest("/", endpoints::login::get_router());
 
     #[cfg(not(feature = "lambda"))]
     {

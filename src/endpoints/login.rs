@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::body::Body;
 use axum::http::Request;
-use axum::middleware::Next;
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::Router;
@@ -9,7 +9,7 @@ use axum::{extract, Json};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{LoginUser, RefreshToken, RefreshTokenRequest, User};
+use crate::model::{AuthToken, LoginUser, RefreshToken, RefreshTokenRequest, User};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
 use crate::{db_handler, utils::check_password};
@@ -21,11 +21,12 @@ use crate::{db_handler, utils::check_password};
 
 pub fn get_router() -> Router {
     Router::new()
-        .route("/email", post(login_with_email))
-        .route("/token", post(get_new_token))
+        .route("/logout", post(logout_user))
+        .layer(middleware::from_fn(auth_middleware))
+        .route("/login/email", post(login_with_email))
+        .route("/login/token", post(get_new_token))
 }
 
-#[axum::debug_handler]
 async fn login_with_email(
     extract::Json(login): extract::Json<LoginUser>,
 ) -> Result<Json<AuthResponse>, impl IntoResponse> {
@@ -52,7 +53,7 @@ async fn login_with_email(
                         if v {
                             let (r, a) = generate_token_pair(user.id)
                                 .await
-                                .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+                                .map_err(ApiResponse::InternalServerErrorWithMessage)?;
                             let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                                 .map_err(|_| ApiResponse::InternalServerError)?;
                             let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
@@ -77,12 +78,48 @@ async fn login_with_email(
     }
 }
 
+async fn logout_user(req: Request<Body>) -> Result<(), impl IntoResponse> {
+    let auth_header = req
+        .headers()
+        .get("auth_token")
+        .and_then(|h| h.to_str().ok());
+
+    let auth_header = if let Some(auth_header) = auth_header {
+        auth_header
+    } else {
+        return Err(ApiResponse::NotFound);
+    };
+
+    let auth_token = AuthToken::from_header_str(auth_header)
+        .await
+        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+
+    if let Some(mut refresh_token) =
+        db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(
+            &auth_token.family.to_string(),
+        )
+        .await
+        .map_err(ApiResponse::InternalServerErrorWithMessage)?
+    {
+        // nuke the token
+        refresh_token
+            .invalidate()
+            .await
+            .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+
+        println!("3");
+        Ok(())
+    } else {
+        Err(ApiResponse::InternalServerError)
+    }
+}
+
 async fn get_new_token(
     extract::Json(token): extract::Json<RefreshTokenRequest>,
 ) -> Result<Json<AuthResponse>, impl IntoResponse> {
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
-        .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
     match db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(&token.id.to_string())
         .await
     {
@@ -94,7 +131,7 @@ async fn get_new_token(
                 token
                     .invalidate()
                     .await
-                    .map_err(|e| ApiResponse::InternalServerErrorWithMessage(e))?;
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
                 let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                     .map_err(|_| ApiResponse::InternalServerError)?;
@@ -106,7 +143,7 @@ async fn get_new_token(
                     refresh_token: signed_ref_token,
                 }))
             } else {
-                return Err(ApiResponse::Unauthorized);
+                Err(ApiResponse::Unauthorized)
             }
         }
         Ok(None) => Err(ApiResponse::Unauthorized),
@@ -130,11 +167,13 @@ pub async fn auth_middleware(
         return Err(ApiResponse::Unauthorized);
     };
 
-    if let Ok(Some(current_user)) = User::get_auth_user(auth_header).await {
-        req.extensions_mut().insert(current_user);
-        Ok(next.run(req).await)
-    } else {
-        Err(ApiResponse::Unauthorized)
+    match User::get_auth_user(auth_header).await {
+        Ok(Some(current_user)) => {
+            req.extensions_mut().insert(current_user);
+            Ok(next.run(req).await)
+        }
+        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+        _ => Err(ApiResponse::Unauthorized),
     }
 }
 

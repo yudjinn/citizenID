@@ -105,7 +105,7 @@ where
     if let Some(items) = result.items {
         let t: Vec<T> = from_items(items)?;
         if let Some(ret) = t.get(0) {
-            return Ok(Some(ret.clone().try_into()?));
+            return Ok(Some(ret.clone()));
         }
     }
     Ok(None)
