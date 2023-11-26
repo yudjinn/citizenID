@@ -326,6 +326,20 @@ impl Application {
             status: AppStatus::Active,
         }
     }
+
+    pub async fn from_request(value: ApplicationRequest) -> Result<Self> {
+        match db_handler::get_item_from_table_with_filter_by_id::<Self>(&value.id.to_string()).await
+        {
+            Ok(Some(app)) => {
+                if app.secret == value.secret {
+                    Ok(app)
+                } else {
+                    Err(anyhow::Error::msg("Invalid request."))
+                }
+            }
+            _ => Err(anyhow::Error::msg("Application not found.")),
+        }
+    }
 }
 
 impl<'a> Model<'a> for Application {
@@ -340,6 +354,13 @@ impl From<Application> for ApplicationResponse {
             status: value.status,
         }
     }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ApplicationRequest {
+    pub id: Uuid,
+    pub secret: String,
+    pub request_for: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

@@ -27,6 +27,8 @@ POST "/login/email" : {
 	auth_token: String,
 	refresh_token: String,
 }
+
+🔒 POST  "/logout" : {} => {}
 ```
 
 ##  Users
