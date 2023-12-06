@@ -1,9 +1,14 @@
-use axum::{routing::get, Router};
+use axum::{
+    http::{header::CONTENT_TYPE, HeaderValue, Method},
+    routing::get,
+    Router,
+};
 use endpoints::login::Keys;
 use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
+use tower_http::cors::CorsLayer;
 pub mod endpoints;
 pub mod error;
 pub mod model;
@@ -15,6 +20,13 @@ lazy_static! {
         .into_string()
         .unwrap();
     static ref KEYS: endpoints::login::Keys = Keys::new(SECRET.as_bytes());
+    static ref CORS_ORIGINS: Vec<String> = std::env::var_os("CORS_ORIGINS")
+        .unwrap_or("http://localhost:5173".into())
+        .into_string()
+        .unwrap()
+        .split(' ')
+        .map(|s| s.to_owned())
+        .collect();
 }
 
 #[cfg(not(feature = "lambda"))]
@@ -36,11 +48,24 @@ async fn main() -> Result<(), RuntimeError> {
 
     tracing_subscriber::fmt::init();
 
+    let cors_origins: Vec<HeaderValue> = CORS_ORIGINS
+        .clone()
+        .iter_mut()
+        .map(|v| v.parse::<HeaderValue>().unwrap())
+        .collect();
+
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([CONTENT_TYPE])
+        .allow_credentials(true)
+        .allow_origin(cors_origins);
+
     let app = Router::new()
         .route("/ping", get(ping))
         .nest("/user", endpoints::user::get_router())
         .nest("/applications", endpoints::apps::get_router())
-        .nest("/", endpoints::login::get_router());
+        .nest("/", endpoints::login::get_router())
+        .layer(cors);
 
     #[cfg(not(feature = "lambda"))]
     {

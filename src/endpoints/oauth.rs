@@ -18,39 +18,39 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_apps))
         .layer(middleware::from_fn(auth_middleware))
-        .layer(middleware::from_fn(oauth_middleware))
+    // .layer(middleware::from_fn(oauth_middleware))
 }
 
 async fn get_apps(
     Extension(application): Extension<Application>,
     Extension(app_request): Extension<ApplicationRequest>,
-    Extension(current_user): Extension<User>,
+    Extension(_current_user): Extension<User>,
 ) -> Result<Redirect, impl IntoResponse> {
     let mut resp_headers = HeaderMap::new();
-    let location;
-    if app_request.request_for.is_some() {
-        location = app_request.request_for.unwrap();
+    let location = if app_request.request_for.is_some() {
+        app_request.request_for.unwrap()
     } else {
-        location = application.callback_uris.get(0).unwrap().to_owned();
-    }
-    if location.len() < 1 {
+        application.callback_uris.get(0).unwrap().to_owned()
+    };
+
+    if location.is_empty() {
         return Err(ApiResponse::NotFound);
     }
     resp_headers.insert(header::LOCATION, HeaderValue::from_str(&location).unwrap());
     Ok(Redirect::temporary(&application.callback_uris[0]))
 }
 
-pub async fn oauth_middleware(
-    mut req: Request<Body>,
-    next: Next<Body>,
-) -> Result<Response, impl IntoResponse> {
-    let auth_header = req
-        .headers()
-        .get("auth_token")
-        .and_then(|h| h.to_str().ok());
+// pub async fn oauth_middleware(
+//     mut req: Request<Body>,
+//     next: Next<Body>,
+// ) -> Result<Response, impl IntoResponse> {
+//     let auth_header = req
+//         .headers()
+//         .get("auth_token")
+//         .and_then(|h| h.to_str().ok());
 
-    // let auth_header = if let Some(auth_header) = auth_header {
-    //     auth_header
-    // } else {
-    // };
-}
+//     // let auth_header = if let Some(auth_header) = auth_header {
+//     auth_header
+// } else {
+// };
+// }
