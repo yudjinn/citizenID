@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Extension, Router,
 };
-use jsonwebtoken::{encode, Header};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use uuid::Uuid;
 
 use crate::{
@@ -55,15 +55,22 @@ async fn reroute(
         id: current_user.id,
         rsi_id: current_user.rsi_id.unwrap(),
     };
-    let signed_payload = encode(&Header::default(), &auth_payload, &KEYS.encoding)
-        .map_err(|_| ApiResponse::InternalServerError)?;
+    let signed_payload = encode(
+        &Header::default(),
+        &auth_payload,
+        &EncodingKey::from_secret(&application.secret.as_bytes()),
+    )
+    .map_err(|_| ApiResponse::InternalServerError)?;
     resp_headers.insert(
-        "corvus-key",
+        "corvus_auth",
         HeaderValue::from_str(&signed_payload).unwrap(),
     );
-
     Ok(Redirect::to(&location))
 }
+
+// TODO: application get-auth-token
+// Params: application id, `corvus-auth` key
+// Returns: Authkey tied to user (using scopes)
 
 pub async fn oauth_middleware(
     mut req: Request<Body>,

@@ -389,3 +389,9 @@ pub struct ApplicationResponse {
 pub struct CreateApplication {
     pub callback_uris: Vec<String>,
 }
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct UpdateApplication {
+    pub callback_uris: Vec<String>,
+    pub status: AppStatus,
+}

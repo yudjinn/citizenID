@@ -1,10 +1,10 @@
 use axum::extract::{self, Path};
-use axum::routing::post;
+use axum::routing::{post, put};
 use axum::{middleware, response::IntoResponse, routing::get, Extension, Json, Router};
 use uuid::Uuid;
 
 use crate::db_handler;
-use crate::model::{Application, ApplicationResponse, CreateApplication, User};
+use crate::model::{Application, ApplicationResponse, CreateApplication, UpdateApplication, User};
 use crate::utils::ApiResponse;
 
 use super::login::auth_middleware;
@@ -14,7 +14,7 @@ pub fn get_router() -> Router {
         .route("/", get(get_apps))
         .route("/new", post(create_app))
         .route("/delete/:app_id", post(delete_app))
-        .route("/update/:app_id", post(update_callbacks))
+        .route("/update/:app_id", put(update_callbacks))
         .layer(middleware::from_fn(auth_middleware))
 }
 
@@ -48,7 +48,7 @@ async fn create_app(
 async fn update_callbacks(
     Extension(current_user): Extension<User>,
     Path(id): Path<Uuid>,
-    extract::Json(callbacks): extract::Json<Vec<String>>,
+    extract::Json(update): extract::Json<UpdateApplication>,
 ) -> Result<Json<ApplicationResponse>, impl IntoResponse> {
     if let Some(mut app) =
         db_handler::get_item_from_table_with_filter_by_id::<Application>(&id.to_string())
@@ -58,7 +58,8 @@ async fn update_callbacks(
         if app.user_id != current_user.id {
             return Err(ApiResponse::Unauthorized);
         }
-        app.callback_uris = callbacks;
+        app.callback_uris = update.callback_uris;
+        app.status = update.status;
         match db_handler::put_item::<Application>(app).await {
             Ok(u) => Ok(Json(u.into())),
             Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),

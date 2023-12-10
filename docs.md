@@ -90,4 +90,40 @@ POST "/user/new" : {
 }
 
 🔒  POST "/applications/delete/{app_id}" : {} => {}
+
+🔒  PUT "/applications/update/{app_id}" : {
+		callback_uris: List<String>,
+		status: [Active, Inactive,  Unknown],
+} => {
+		id: Uuid,
+		callback_uris: List<String>,
+		status: [Active, Inactive,  Unknown],
+}
 ```
+
+## OAuth
+```
+🔒 GET "/oauth" : {
+	corvus_key: application's id,
+	corvus_secret: application's secret,
+	corvus_request: specific uri to redirect to, if it's in the list of callbacks
+		->  otherwise, use first callback,
+	TODO: scopes to enable
+} => 
+THIS SHOULD FIRST PROMPT THE USER FOR CONSENT(not yet implemented) =>
+REDIRECT to redirect uri chosen (or first in list for application)
+{
+	corvus-auth: payload containing corvus user-id and rsi_id tied to account
+		-> encoded using application's secret
+}
+
+TODO: NOT IMPLEMENTED YET:
+🔒 POST "/oauth" : {
+	corvus_key: application's id,
+	corvus_auth: encoded key from earlier,
+	} => {
+		corvus_token: auth token for access to user details, based on scope
+	}
+### This token expires after a set TTL, and the end application will have to re-prompt for access
+```
+
