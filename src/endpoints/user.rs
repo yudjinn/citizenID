@@ -32,6 +32,9 @@ pub fn get_router() -> Router {
 async fn get_user(
     Extension(current_user): Extension<User>,
 ) -> Result<Json<UserResponse>, impl IntoResponse> {
+    // TODO make all tokens have a scope, and scope changes what info is returned here
+    // Regular login -> tokin with full scope
+    // Oauth -> just id/rsi_id/status?
     match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
         .await
     {

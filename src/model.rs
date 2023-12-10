@@ -156,7 +156,7 @@ impl AuthToken {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UserStatus {
     WaitingValidation,
     Active,
@@ -191,6 +191,12 @@ pub struct UserResponse {
     pub rsi_id: Option<String>,
     pub sentinel: String,
     pub status: UserStatus,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct OAuthUser {
+    pub id: Uuid,
+    pub rsi_id: String,
 }
 
 impl From<User> for UserResponse {
@@ -300,14 +306,14 @@ pub struct CreateUserEmail {
     pub password: String,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum AppStatus {
     Active,
     Inactive,
     Unknown,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Application {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -356,11 +362,20 @@ impl From<Application> for ApplicationResponse {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ApplicationRequest {
     pub id: Uuid,
     pub secret: String,
     pub request_for: Option<String>,
+}
+
+impl ApplicationRequest {
+    pub async fn from_header_str(s: &str) -> Result<Self> {
+        match decode::<Self>(s, &KEYS.decoding, &Validation::default()) {
+            Ok(d) => Ok(d.claims),
+            Err(e) => Err(anyhow::Error::msg(format!("Could not decode token: {}", e))),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
