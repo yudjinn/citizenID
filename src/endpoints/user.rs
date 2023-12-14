@@ -1,6 +1,5 @@
 use axum::{
     middleware,
-    response::IntoResponse,
     routing::{get, post, put},
     Extension, Json, Router,
 };
@@ -31,7 +30,7 @@ pub fn get_router() -> Router {
 
 async fn get_user(
     Extension(current_user): Extension<User>,
-) -> Result<Json<UserResponse>, impl IntoResponse> {
+) -> Result<Json<UserResponse>, ApiResponse> {
     // TODO make all tokens have a scope, and scope changes what info is returned here
     // Regular login -> tokin with full scope
     // Oauth -> just id/rsi_id/status?
@@ -44,7 +43,7 @@ async fn get_user(
     }
 }
 
-async fn delete_user(Extension(current_user): Extension<User>) -> Result<(), impl IntoResponse> {
+async fn delete_user(Extension(current_user): Extension<User>) -> Result<(), ApiResponse> {
     let mut user = current_user.clone();
     user.status = UserStatus::Inactive;
     match db_handler::update_item::<User>(current_user.id, user).await {
@@ -55,7 +54,7 @@ async fn delete_user(Extension(current_user): Extension<User>) -> Result<(), imp
 
 async fn create_user_from_email(
     user: Json<CreateUserEmail>,
-) -> Result<Json<UserResponse>, impl IntoResponse> {
+) -> Result<Json<UserResponse>, ApiResponse> {
     // check the item doesnt already exist
     match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &user.email).await {
         Ok(Some(_)) => Err(ApiResponse::ResourceExists),
@@ -73,7 +72,7 @@ async fn create_user_from_email(
 async fn update_user(
     Extension(current_user): Extension<User>,
     update: Json<UpdateUser>,
-) -> Result<Json<UserResponse>, impl IntoResponse> {
+) -> Result<Json<UserResponse>, ApiResponse> {
     // check the item doesnt already exist
     match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
         .await

@@ -10,7 +10,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::model::{AuthToken, RefreshToken};
+use crate::model::{AuthToken, RefreshToken, Scope};
 
 pub async fn hash_password(password: &str) -> Result<(String, String)> {
     let salt = SaltString::generate(&mut OsRng);
@@ -37,8 +37,11 @@ pub async fn check_password(password: &str, salt: &str, db_pass: &str) -> Result
     }
 }
 
-pub async fn generate_token_pair(user_id: Uuid) -> Result<(RefreshToken, AuthToken)> {
-    let r = RefreshToken::default(user_id).await?;
+pub async fn generate_token_pair(
+    user_id: Uuid,
+    scopes: Vec<Scope>,
+) -> Result<(RefreshToken, AuthToken)> {
+    let r = RefreshToken::default(user_id, scopes).await?;
     let a = AuthToken::default(&r).await;
     Ok((r, a))
 }

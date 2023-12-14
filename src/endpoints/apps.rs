@@ -1,6 +1,6 @@
 use axum::extract::{self, Path};
 use axum::routing::{post, put};
-use axum::{middleware, response::IntoResponse, routing::get, Extension, Json, Router};
+use axum::{middleware, routing::get, Extension, Json, Router};
 use uuid::Uuid;
 
 use crate::db_handler;
@@ -20,7 +20,7 @@ pub fn get_router() -> Router {
 
 async fn get_apps(
     Extension(current_user): Extension<User>,
-) -> Result<Json<Vec<ApplicationResponse>>, impl IntoResponse> {
+) -> Result<Json<Vec<ApplicationResponse>>, ApiResponse> {
     match db_handler::get_all_from_table_with_filter_by_index::<Application>(
         "user_id",
         &current_user.id.to_string(),
@@ -37,7 +37,7 @@ async fn get_apps(
 async fn create_app(
     Extension(current_user): Extension<User>,
     extract::Json(app): extract::Json<CreateApplication>,
-) -> Result<Json<Application>, impl IntoResponse> {
+) -> Result<Json<Application>, ApiResponse> {
     let new = Application::new_from_template(&app, current_user.id).await;
     match db_handler::put_item::<Application>(new).await {
         Ok(u) => Ok(Json(u)),
@@ -49,7 +49,7 @@ async fn update_callbacks(
     Extension(current_user): Extension<User>,
     Path(id): Path<Uuid>,
     extract::Json(update): extract::Json<UpdateApplication>,
-) -> Result<Json<ApplicationResponse>, impl IntoResponse> {
+) -> Result<Json<ApplicationResponse>, ApiResponse> {
     if let Some(mut app) =
         db_handler::get_item_from_table_with_filter_by_id::<Application>(&id.to_string())
             .await
@@ -72,7 +72,7 @@ async fn update_callbacks(
 async fn delete_app(
     Extension(current_user): Extension<User>,
     app_id: String,
-) -> Result<(), impl IntoResponse> {
+) -> Result<(), ApiResponse> {
     match db_handler::get_item_from_table_with_filter_by_id::<Application>(&app_id).await {
         Ok(Some(app)) => {
             if current_user.id != app.user_id {

@@ -5,6 +5,8 @@ use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use uuid::Uuid;
 
 use crate::KEYS;
@@ -24,6 +26,7 @@ pub enum TokenVersion {
 pub struct RefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub scopes: Vec<Scope>,
     pub valid: bool,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
@@ -40,11 +43,12 @@ impl<'a> Model<'a> for RefreshToken {
 }
 
 impl RefreshToken {
-    pub async fn default(user_id: Uuid) -> Result<Self> {
+    pub async fn default(user_id: Uuid, scopes: Vec<Scope>) -> Result<Self> {
         let r = RefreshToken {
             id: Uuid::new_v4(),
             user_id,
             valid: true,
+            scopes,
             exp: Utc::now().add(chrono::Duration::hours(4)),
             version: TokenVersion::default(),
         };
@@ -127,10 +131,28 @@ impl RefreshToken {
     }
 }
 
+#[derive(Deserialize, Serialize, Clone, EnumIter)]
+pub enum Scope {
+    None,
+    GetUser,
+}
+
+impl Scope {
+    pub fn all() -> Vec<Scope> {
+        Self::iter().collect()
+    }
+
+    pub async fn get_scopes_from_token(token_str: &str) -> Result<Vec<Self>> {
+        let t = AuthToken::from_header_str(token_str).await?;
+        Ok(t.scopes)
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct AuthToken {
     pub user_id: Uuid,
     pub family: Uuid,
+    pub scopes: Vec<Scope>,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
 }
@@ -140,6 +162,7 @@ impl AuthToken {
         Self {
             user_id: token.user_id.to_owned(),
             family: token.id.to_owned(),
+            scopes: token.scopes.to_owned(),
             exp: Utc::now().add(chrono::Duration::hours(2)),
         }
     }
@@ -193,7 +216,7 @@ pub struct UserResponse {
     pub status: UserStatus,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OAuthUser {
     pub id: Uuid,
     pub rsi_id: String,

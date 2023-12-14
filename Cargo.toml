@@ -29,6 +29,8 @@ serde = { version = "1.0.190", features = ["derive"] }
 serde_dynamo = { version = "4.2.7", features = ["aws-sdk-dynamodb+0_33"] }
 serde_with = { version = "3.4.0", features = ["json"] }
 sha2 = "0.10.8"
+strum = { version = "0.25.0", features = ["derive"] }
+strum_macros = "0.25.3"
 time = { version = "0.3.30", features = ["serde"] }
 tokio = { version = "1.33.0", features = ["rt-multi-thread", "macros"] }
 tower-http = { version = "0.4", features = ["cors", "compression-gzip", "compression-deflate", "trace"] }

@@ -2,14 +2,14 @@ use anyhow::Result;
 use axum::body::Body;
 use axum::http::Request;
 use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::post;
 use axum::Router;
 use axum::{extract, Json};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AuthToken, LoginUser, RefreshToken, RefreshTokenRequest, User};
+use crate::model::{AuthToken, LoginUser, RefreshToken, RefreshTokenRequest, Scope, User};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
 use crate::{db_handler, utils::check_password};
@@ -29,7 +29,7 @@ pub fn get_router() -> Router {
 
 async fn login_with_email(
     extract::Json(login): extract::Json<LoginUser>,
-) -> Result<Json<AuthResponse>, impl IntoResponse> {
+) -> Result<Json<AuthResponse>, ApiResponse> {
     match login {
         LoginUser {
             email: Some(email),
@@ -51,7 +51,7 @@ async fn login_with_email(
                     .await
                     {
                         if v {
-                            let (r, a) = generate_token_pair(user.id)
+                            let (r, a) = generate_token_pair(user.id, Scope::all())
                                 .await
                                 .map_err(ApiResponse::InternalServerErrorWithMessage)?;
                             let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
@@ -78,7 +78,7 @@ async fn login_with_email(
     }
 }
 
-async fn logout_user(req: Request<Body>) -> Result<(), impl IntoResponse> {
+async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
     let auth_header = req
         .headers()
         .get("auth_token")
@@ -116,7 +116,7 @@ async fn logout_user(req: Request<Body>) -> Result<(), impl IntoResponse> {
 
 async fn get_new_token(
     extract::Json(token): extract::Json<RefreshTokenRequest>,
-) -> Result<Json<AuthResponse>, impl IntoResponse> {
+) -> Result<Json<AuthResponse>, ApiResponse> {
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
@@ -125,7 +125,7 @@ async fn get_new_token(
     {
         Ok(Some(mut token)) => {
             if token.valid {
-                let (r, a) = generate_token_pair(token.user_id)
+                let (r, a) = generate_token_pair(token.user_id, Scope::all())
                     .await
                     .map_err(|_| ApiResponse::InternalServerError)?;
                 token
@@ -154,8 +154,7 @@ async fn get_new_token(
 pub async fn auth_middleware(
     mut req: Request<Body>,
     next: Next<Body>,
-) -> Result<Response, impl IntoResponse> {
-    // let headers = req.headers_mut();
+) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()
         .get("auth_token")
@@ -167,14 +166,25 @@ pub async fn auth_middleware(
         return Err(ApiResponse::Unauthorized);
     };
 
-    match User::get_auth_user(auth_header).await {
-        Ok(Some(current_user)) => {
-            req.extensions_mut().insert(current_user);
-            Ok(next.run(req).await)
+    let scopes = match Scope::get_scopes_from_token(auth_header).await {
+        Ok(scopes) => scopes,
+        _ => {
+            return Err(ApiResponse::Unauthorized);
         }
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
-        _ => Err(ApiResponse::Unauthorized),
-    }
+    };
+
+    let user = match User::get_auth_user(auth_header).await {
+        Ok(Some(current_user)) => current_user,
+        Err(e) => {
+            return Err(ApiResponse::InternalServerErrorWithMessage(e));
+        }
+        _ => {
+            return Err(ApiResponse::Unauthorized);
+        }
+    };
+    req.extensions_mut().insert(user);
+    req.extensions_mut().insert(scopes);
+    Ok(next.run(req).await)
 }
 
 // async fn login_with_discord(&self) -> UserResponse {

@@ -1,18 +1,20 @@
 use axum::{
     body::Body,
-    http::{header, HeaderMap, HeaderValue, Request},
+    extract::Path,
+    headers::{Cookie, HeaderMapExt},
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, Request},
     middleware::{self, Next},
-    response::{IntoResponse, Redirect, Response},
+    response::{Redirect, Response},
     routing::get,
     Extension, Router,
 };
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use uuid::Uuid;
 
 use crate::{
+    db_handler,
     model::{Application, ApplicationRequest, OAuthUser, User, UserStatus},
     utils::ApiResponse,
-    KEYS,
 };
 
 use super::login::auth_middleware;
@@ -22,13 +24,42 @@ pub fn get_router() -> Router {
         .route("/", get(reroute))
         .layer(middleware::from_fn(auth_middleware))
         .layer(middleware::from_fn(oauth_middleware))
+        .route("/test", get(test_token))
+}
+
+// TODO: this should be the first endpoint hit:
+// Flow should be:
+// get code -> prompt user for response -> hit reroute with code -> redirect to uri with values in body
+// async fn get_code
+async fn test_token(
+    Path(application_id): Path<Uuid>,
+    req: Request<Body>,
+) -> Result<String, ApiResponse> {
+    let cookie = req.headers().typed_get::<Cookie>().unwrap();
+    let auth = cookie.get("corvus_auth").unwrap().to_owned();
+    let application = db_handler::get_item_from_table_with_filter_by_id::<Application>(
+        &application_id.to_string(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    match decode::<OAuthUser>(
+        &auth,
+        &DecodingKey::from_secret(&application.secret.as_bytes()),
+        &Validation::default(),
+    ) {
+        Ok(d) => Ok(format!("{:?}", d.claims)),
+        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(
+            anyhow::Error::msg(e.to_string()),
+        )),
+    }
 }
 
 async fn reroute(
     Extension(application): Extension<Application>,
     Extension(app_request): Extension<ApplicationRequest>,
     Extension(current_user): Extension<User>,
-) -> Result<Redirect, impl IntoResponse> {
+) -> Result<(HeaderMap, Redirect), ApiResponse> {
     // TODO: make this prompt the user for consent
 
     // If inactive, boot
@@ -48,9 +79,6 @@ async fn reroute(
     if location.is_empty() {
         return Err(ApiResponse::NotFound);
     }
-    resp_headers.insert(header::LOCATION, HeaderValue::from_str(&location).unwrap());
-    // TODO: make a jwt auth token  with user info
-    // resp_headers.insert("corvus_key", )
     let auth_payload = OAuthUser {
         id: current_user.id,
         rsi_id: current_user.rsi_id.unwrap(),
@@ -62,10 +90,11 @@ async fn reroute(
     )
     .map_err(|_| ApiResponse::InternalServerError)?;
     resp_headers.insert(
-        "corvus_auth",
-        HeaderValue::from_str(&signed_payload).unwrap(),
+        SET_COOKIE,
+        HeaderValue::from_str(&format!("corvus_auth={}", &signed_payload)).unwrap(),
     );
-    Ok(Redirect::to(&location))
+    // TODO: add a body of url-encoded and send to redirect
+    Ok((resp_headers, Redirect::temporary(&location)))
 }
 
 // TODO: application get-auth-token
@@ -75,7 +104,7 @@ async fn reroute(
 pub async fn oauth_middleware(
     mut req: Request<Body>,
     next: Next<Body>,
-) -> Result<Response, impl IntoResponse> {
+) -> Result<Response, ApiResponse> {
     let corvus_key = if let Some(corvus_key) = get_header("corvus_key", &req) {
         corvus_key
     } else {
