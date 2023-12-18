@@ -131,18 +131,39 @@ impl RefreshToken {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, EnumIter)]
+pub type Scopes = Vec<Scope>;
+
+#[derive(Deserialize, Serialize, Clone, EnumIter, PartialEq, Eq)]
 pub enum Scope {
-    None,
-    GetUser,
+    Invalid,
+    GetUserID,
+    GetRSIID,
+    GetDiscordID,
+    GetUserFull,
+}
+
+impl From<String> for Scope {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "user" => Self::GetUserID,
+            "discord" => Self::GetDiscordID,
+            "rsi" => Self::GetRSIID,
+            "full" => Self::GetUserFull,
+            _ => Self::Invalid,
+        }
+    }
 }
 
 impl Scope {
+    pub fn check_scopes(scopes: &Scopes, target: &Scope) -> bool {
+        scopes.contains(target)
+    }
+
     pub fn all() -> Vec<Scope> {
         Self::iter().collect()
     }
 
-    pub async fn get_scopes_from_token(token_str: &str) -> Result<Vec<Self>> {
+    pub async fn get_scopes_from_token(token_str: &str) -> Result<Scopes> {
         let t = AuthToken::from_header_str(token_str).await?;
         Ok(t.scopes)
     }

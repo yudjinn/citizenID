@@ -6,7 +6,9 @@ use axum::{
 
 use crate::{
     db_handler,
-    model::{CreateUserEmail, RefreshToken, UpdateUser, User, UserResponse, UserStatus},
+    model::{
+        CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User, UserResponse, UserStatus,
+    },
     utils::{hash_password, ApiResponse},
 };
 
@@ -30,6 +32,7 @@ pub fn get_router() -> Router {
 
 async fn get_user(
     Extension(current_user): Extension<User>,
+    Extension(scopes): Extension<Scopes>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
     // TODO make all tokens have a scope, and scope changes what info is returned here
     // Regular login -> tokin with full scope
@@ -37,7 +40,11 @@ async fn get_user(
     match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
         .await
     {
-        Ok(Some(user)) => Ok(Json(user.clone().into())),
+        Ok(Some(user)) => {
+            let user_resp = user.clone();
+
+            Ok(Json(user_resp.into()))
+        }
         Ok(None) => Err(ApiResponse::NotFound),
         Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
     }

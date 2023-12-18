@@ -27,10 +27,10 @@ pub fn get_router() -> Router {
         .route("/test", get(test_token))
 }
 
-// TODO: this should be the first endpoint hit:
 // Flow should be:
 // get code -> prompt user for response -> hit reroute with code -> redirect to uri with values in body
 // async fn get_code
+
 async fn test_token(
     Path(application_id): Path<Uuid>,
     req: Request<Body>,
@@ -45,7 +45,7 @@ async fn test_token(
     .unwrap();
     match decode::<OAuthUser>(
         &auth,
-        &DecodingKey::from_secret(&application.secret.as_bytes()),
+        &DecodingKey::from_secret(application.secret.as_bytes()),
         &Validation::default(),
     ) {
         Ok(d) => Ok(format!("{:?}", d.claims)),
@@ -60,8 +60,6 @@ async fn reroute(
     Extension(app_request): Extension<ApplicationRequest>,
     Extension(current_user): Extension<User>,
 ) -> Result<(HeaderMap, Redirect), ApiResponse> {
-    // TODO: make this prompt the user for consent
-
     // If inactive, boot
     if current_user.status != UserStatus::Active {
         return Err(ApiResponse::Unauthorized);
@@ -86,7 +84,7 @@ async fn reroute(
     let signed_payload = encode(
         &Header::default(),
         &auth_payload,
-        &EncodingKey::from_secret(&application.secret.as_bytes()),
+        &EncodingKey::from_secret(application.secret.as_bytes()),
     )
     .map_err(|_| ApiResponse::InternalServerError)?;
     resp_headers.insert(
@@ -117,11 +115,7 @@ pub async fn oauth_middleware(
         return Err(ApiResponse::Unauthorized);
     };
 
-    let corvus_request = if let Some(corvus_request) = get_header("corvus_request", &req) {
-        Some(corvus_request)
-    } else {
-        None
-    };
+    let corvus_request = get_header("corvus_request", &req);
 
     let id = Uuid::parse_str(&corvus_key).map_err(|_| ApiResponse::InternalServerError)?;
     let app_request = ApplicationRequest {
@@ -142,9 +136,5 @@ pub async fn oauth_middleware(
 fn get_header(key: &str, req: &Request<Body>) -> Option<String> {
     let ret = req.headers().get(key).and_then(|h| h.to_str().ok());
 
-    if let Some(corvus_key) = ret {
-        return Some(corvus_key.to_owned());
-    } else {
-        return None;
-    };
+    ret.map(|corvus_key| corvus_key.to_owned())
 }

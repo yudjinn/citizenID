@@ -65,7 +65,7 @@ async fn update_callbacks(
             Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
         }
     } else {
-        return Err(ApiResponse::NotFound);
+        Err(ApiResponse::NotFound)
     }
 }
 

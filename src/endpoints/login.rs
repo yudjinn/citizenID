@@ -4,8 +4,8 @@ use axum::http::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::post;
-use axum::Router;
 use axum::{extract, Json};
+use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
@@ -22,9 +22,17 @@ use crate::{db_handler, utils::check_password};
 pub fn get_router() -> Router {
     Router::new()
         .route("/logout", post(logout_user))
+        .route("/logout_all", post(invalidate_all_tokens))
         .layer(middleware::from_fn(auth_middleware))
         .route("/login/email", post(login_with_email))
         .route("/login/token", post(get_new_token))
+}
+
+async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiResponse {
+    match RefreshToken::invalidate_all_for_user(current_user.id).await {
+        Ok(_) => ApiResponse::Success,
+        _ => ApiResponse::InternalServerError,
+    }
 }
 
 async fn login_with_email(

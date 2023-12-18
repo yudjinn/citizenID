@@ -55,6 +55,7 @@ pub enum ApiResponse {
     InternalServerErrorWithMessage(Error),
     NotImplemented,
     ResourceExists,
+    Success,
 }
 
 impl IntoResponse for ApiResponse {
@@ -75,6 +76,7 @@ impl IntoResponse for ApiResponse {
             ApiResponse::NotImplemented => (StatusCode::NOT_IMPLEMENTED, Body::empty()),
             ApiResponse::NotFound => (StatusCode::NOT_FOUND, Body::from("Not found.")),
             ApiResponse::ResourceExists => (StatusCode::CONFLICT, Body::from("Resource exists.")),
+            ApiResponse::Success => (StatusCode::OK, Body::empty()),
         };
         Response::builder()
             .status(status)
