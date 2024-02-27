@@ -1,5 +1,5 @@
 use axum::{
-    http::{header::CONTENT_TYPE, HeaderValue, Method},
+    http::{header::CONTENT_TYPE, HeaderValue, HeaderName, Method},
     routing::get,
     Router,
 };
@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 pub mod endpoints;
 pub mod error;
 pub mod model;
@@ -56,7 +56,7 @@ async fn main() -> Result<(), RuntimeError> {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([CONTENT_TYPE])
+        .allow_headers([CONTENT_TYPE, HeaderName::from_lowercase(b"auth_token").unwrap(), HeaderName::from_lowercase(b"refresh_token").unwrap()])
         .allow_credentials(true)
         .allow_origin(cors_origins);
 
