@@ -54,7 +54,7 @@ POST "/login/email" : {
 	status: [WaitingValidation,  Active, Inactive, Unknown]
 }
 
-🔒 POST "/user/delete" : {} => {}
+🔒 DELETE "/user/delete" : {} => {}
 
 POST "/user/new" : {
 	email: String,
@@ -74,6 +74,7 @@ POST "/user/new" : {
 🔒 GET "/applications/" : {} => {
 	[
 		id: Uuid,
+		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
 	]
@@ -83,6 +84,7 @@ POST "/user/new" : {
 	callback_uris: List<String>,
 } => {
 	id: Uuid,
+	name: String,
 	user_id: Uuid,
 	secret: String,
 	callback_uris: List<String>
@@ -92,10 +94,12 @@ POST "/user/new" : {
 🔒  POST "/applications/delete/{app_id}" : {} => {}
 
 🔒  PUT "/applications/update/{app_id}" : {
+		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
 } => {
 		id: Uuid,
+		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
 }

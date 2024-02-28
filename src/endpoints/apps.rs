@@ -1,5 +1,5 @@
 use axum::extract::{self, Path};
-use axum::routing::{post, put};
+use axum::routing::{delete, post, put};
 use axum::{middleware, routing::get, Extension, Json, Router};
 use uuid::Uuid;
 
@@ -13,7 +13,7 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_apps))
         .route("/new", post(create_app))
-        .route("/delete/:app_id", post(delete_app))
+        .route("/delete/:app_id", delete(delete_app))
         .route("/update/:app_id", put(update_callbacks))
         .layer(middleware::from_fn(auth_middleware))
 }
@@ -58,8 +58,15 @@ async fn update_callbacks(
         if app.user_id != current_user.id {
             return Err(ApiResponse::Unauthorized);
         }
-        app.callback_uris = update.callback_uris;
-        app.status = update.status;
+        if update.callback_uris.is_some() {
+            app.callback_uris = update.callback_uris.unwrap();
+        }
+        if update.status.is_some() {
+            app.status = update.status.unwrap();
+        }
+        if update.name.is_some() {
+            app.name = update.name.unwrap();
+        }
         match db_handler::put_item::<Application>(app).await {
             Ok(u) => Ok(Json(u.into())),
             Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),

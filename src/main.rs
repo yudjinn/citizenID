@@ -1,5 +1,5 @@
 use axum::{
-    http::{header::CONTENT_TYPE, HeaderValue, HeaderName, Method},
+    http::{header::CONTENT_TYPE, HeaderName, HeaderValue, Method},
     routing::get,
     Router,
 };
@@ -55,8 +55,12 @@ async fn main() -> Result<(), RuntimeError> {
         .collect();
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers([CONTENT_TYPE, HeaderName::from_lowercase(b"auth_token").unwrap(), HeaderName::from_lowercase(b"refresh_token").unwrap()])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([
+            CONTENT_TYPE,
+            HeaderName::from_lowercase(b"auth_token").unwrap(),
+            HeaderName::from_lowercase(b"refresh_token").unwrap(),
+        ])
         .allow_credentials(true)
         .allow_origin(cors_origins);
 

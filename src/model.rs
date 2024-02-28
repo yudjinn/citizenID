@@ -439,6 +439,7 @@ pub struct CreateApplication {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct UpdateApplication {
-    pub callback_uris: Vec<String>,
-    pub status: AppStatus,
+    pub name: Option<String>,
+    pub callback_uris: Option<Vec<String>>,
+    pub status: Option<AppStatus>,
 }
