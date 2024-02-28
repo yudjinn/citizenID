@@ -49,7 +49,7 @@ impl RefreshToken {
             user_id,
             valid: true,
             scopes,
-            exp: Utc::now().add(chrono::Duration::hours(4)),
+            exp: Utc::now().add(chrono::Duration::days(7)),
             version: TokenVersion::default(),
         };
 
@@ -361,6 +361,7 @@ pub enum AppStatus {
 pub struct Application {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub name: String,
     pub secret: String,
     pub callback_uris: Vec<String>,
     pub status: AppStatus,
@@ -370,6 +371,7 @@ impl Application {
     pub async fn new_from_template(template: &CreateApplication, user_id: Uuid) -> Self {
         Self {
             id: Uuid::new_v4(),
+            name: template.name.clone(),
             user_id,
             secret: Uuid::new_v4().to_string(),
             callback_uris: template.callback_uris.clone(),
@@ -431,6 +433,7 @@ pub struct ApplicationResponse {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateApplication {
+    pub name: String,
     pub callback_uris: Vec<String>,
 }
 
