@@ -1,6 +1,6 @@
 use axum::{
     middleware,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post},
     Extension, Json, Router,
 };
 
@@ -22,10 +22,10 @@ use super::login::auth_middleware;
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_user))
-        .route("/update", put(update_user))
-        .route("/delete", delete(delete_user))
+        .route("/", patch(update_user))
+        .route("/", delete(delete_user))
         .layer(middleware::from_fn(auth_middleware))
-        .route("/new", post(create_user_from_email))
+        .route("/", post(create_user_from_email))
 }
 
 async fn get_user(

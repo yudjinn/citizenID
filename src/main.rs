@@ -55,7 +55,13 @@ async fn main() -> Result<(), RuntimeError> {
         .collect();
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+        ])
         .allow_headers([
             CONTENT_TYPE,
             HeaderName::from_lowercase(b"auth_token").unwrap(),

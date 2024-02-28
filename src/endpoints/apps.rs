@@ -1,5 +1,5 @@
 use axum::extract::{self, Path};
-use axum::routing::{delete, post, put};
+use axum::routing::{delete, patch, post};
 use axum::{middleware, routing::get, Extension, Json, Router};
 use uuid::Uuid;
 
@@ -12,9 +12,9 @@ use super::login::auth_middleware;
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_apps))
-        .route("/new", post(create_app))
-        .route("/delete/:app_id", delete(delete_app))
-        .route("/update/:app_id", put(update_callbacks))
+        .route("/", post(create_app))
+        .route("/:app_id", delete(delete_app))
+        .route("/:app_id", patch(update_callbacks))
         .layer(middleware::from_fn(auth_middleware))
 }
 

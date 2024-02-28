@@ -42,7 +42,7 @@ POST "/login/email" : {
 	status: [WaitingValidation,  Active, Inactive, Unknown]
 }
 
-🔒 PUT "/user/update": {
+🔒 PATCH "/user/update": {
 	email: Option<String>,
 	password: Option<String,
 } => {
@@ -54,9 +54,9 @@ POST "/login/email" : {
 	status: [WaitingValidation,  Active, Inactive, Unknown]
 }
 
-🔒 DELETE "/user/delete" : {} => {}
+🔒 DELETE "/user" : {} => {}
 
-POST "/user/new" : {
+POST "/user" : {
 	email: String,
 	password: String,
 } => {
@@ -80,7 +80,7 @@ POST "/user/new" : {
 	]
 }
 
-🔒 POST  "/applications/new" : {
+🔒 POST  "/applications" : {
 	callback_uris: List<String>,
 } => {
 	id: Uuid,
@@ -91,9 +91,9 @@ POST "/user/new" : {
 	status: [Active, Inactive, Unknown]
 }
 
-🔒  POST "/applications/delete/{app_id}" : {} => {}
+🔒  DELETE "/applications/{app_id}" : {} => {}
 
-🔒  PUT "/applications/update/{app_id}" : {
+🔒  PATCH "/applications/update/{app_id}" : {
 		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
