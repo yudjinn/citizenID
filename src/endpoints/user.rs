@@ -6,9 +6,7 @@ use axum::{
 
 use crate::{
     db_handler,
-    model::{
-        CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User, UserResponse, UserStatus,
-    },
+    model::{CreateUserEmail, RefreshToken, Scopes, UpdateUser, User, UserResponse, UserStatus},
     utils::{hash_password, ApiResponse},
 };
 

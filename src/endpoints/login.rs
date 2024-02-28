@@ -184,10 +184,12 @@ pub async fn auth_middleware(
     let user = match User::get_auth_user(auth_header).await {
         Ok(Some(current_user)) => current_user,
         Err(e) => {
-            return Err(ApiResponse::InternalServerErrorWithMessage(e));
+            // log this error
+            println!("{}", e);
+            return Err(ApiResponse::Unauthorized);
         }
         _ => {
-            return Err(ApiResponse::Unauthorized);
+            return Err(ApiResponse::InternalServerError);
         }
     };
     req.extensions_mut().insert(user);
