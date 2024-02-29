@@ -9,10 +9,10 @@ use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AuthToken, LoginUser, RefreshToken, RefreshTokenRequest, Scope, User};
+use crate::model::{AuthToken, LoginUser, Model, RefreshToken, RefreshTokenRequest, Scope, User};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
-use crate::{db_handler, utils::check_password};
+use crate::{db_handler, utils::check_hash};
 
 // async fn api_checker(req: &Request, api_key: ApiKey) -> Option<User> {
 //     let server_key = req.data::<ServerKey>().unwrap();
@@ -51,7 +51,7 @@ async fn login_with_email(
                     if user.hashed_password.is_none() || user.salt.is_none() {
                         return Err(ApiResponse::Unauthorized);
                     }
-                    if let Ok(v) = check_password(
+                    if let Ok(v) = check_hash(
                         &password,
                         &user.salt.clone().unwrap(),
                         &user.hashed_password.clone().unwrap(),
@@ -59,7 +59,7 @@ async fn login_with_email(
                     .await
                     {
                         if v {
-                            let (r, a) = generate_token_pair(user.id, Scope::all())
+                            let (r, a) = generate_token_pair(user.id, None, Scope::all())
                                 .await
                                 .map_err(ApiResponse::InternalServerErrorWithMessage)?;
                             let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
@@ -128,12 +128,14 @@ async fn get_new_token(
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-    match db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(&token.id.to_string())
-        .await
+    match db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(
+        &RefreshToken::to_db(token).await.family,
+    )
+    .await
     {
         Ok(Some(mut token)) => {
             if token.valid {
-                let (r, a) = generate_token_pair(token.user_id, Scope::all())
+                let (r, a) = generate_token_pair(token.user_id, Some(token.family), Scope::all())
                     .await
                     .map_err(|_| ApiResponse::InternalServerError)?;
                 token

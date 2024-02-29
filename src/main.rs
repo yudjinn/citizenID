@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 pub mod endpoints;
 pub mod error;
 pub mod model;

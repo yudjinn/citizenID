@@ -14,21 +14,25 @@ use crate::model::{AuthToken, RefreshToken, Scope};
 
 pub async fn hash_password(password: &str) -> Result<(String, String)> {
     let salt = SaltString::generate(&mut OsRng);
+    hash_string(password, salt).await
+}
+
+pub async fn hash_string(val: &str, salt: SaltString) -> Result<(String, String)> {
     let argon = Argon2::default();
-    if let Ok(hashed) = argon.hash_password(format!("{}{}", password, salt).as_bytes(), &salt) {
+    if let Ok(hashed) = argon.hash_password(format!("{}{}", val, salt).as_bytes(), &salt) {
         Ok((hashed.to_string(), salt.to_string()))
     } else {
         Err(Error::msg("Failed to hash password."))
     }
 }
 
-pub async fn check_password(password: &str, salt: &str, db_pass: &str) -> Result<bool> {
+pub async fn check_hash(hash_string: &str, salt: &str, comp_string: &str) -> Result<bool> {
     let argon = Argon2::default();
     if let Ok(salt_str) = SaltString::from_b64(salt) {
         if let Ok(hashed) =
-            argon.hash_password(format!("{}{}", password, salt).as_bytes(), &salt_str)
+            argon.hash_password(format!("{}{}", hash_string, salt).as_bytes(), &salt_str)
         {
-            Ok(hashed.to_string() == db_pass)
+            Ok(hashed.to_string() == comp_string)
         } else {
             Err(Error::msg("Failed to hash password."))
         }
@@ -39,9 +43,14 @@ pub async fn check_password(password: &str, salt: &str, db_pass: &str) -> Result
 
 pub async fn generate_token_pair(
     user_id: Uuid,
+    family: Option<Uuid>,
     scopes: Vec<Scope>,
 ) -> Result<(RefreshToken, AuthToken)> {
-    let r = RefreshToken::default(user_id, scopes).await?;
+    let r = if family.is_some() {
+        RefreshToken::new(user_id, family.unwrap(), scopes).await?
+    } else {
+        RefreshToken::default(user_id, scopes).await?
+    };
     let a = AuthToken::default(&r).await;
     Ok((r, a))
 }

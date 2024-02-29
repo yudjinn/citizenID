@@ -30,7 +30,7 @@ pub fn get_router() -> Router {
 
 async fn get_user(
     Extension(current_user): Extension<User>,
-    Extension(scopes): Extension<Scopes>,
+    Extension(_scopes): Extension<Scopes>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
     // TODO make all tokens have a scope, and scope changes what info is returned here
     // Regular login -> tokin with full scope

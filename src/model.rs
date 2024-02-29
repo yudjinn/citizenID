@@ -1,6 +1,7 @@
 use std::ops::Add;
 
 use anyhow::Result;
+use argon2::password_hash::SaltString;
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
@@ -9,11 +10,14 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
-use crate::KEYS;
+use crate::utils::hash_string;
 use crate::{db_handler, utils::hash_password};
+use crate::{KEYS, SECRET};
 
-pub trait Model<'a> {
-    const TABLE: &'a str;
+pub trait Model {
+    const TABLE: &'static str;
+    type DbModel: Clone + Serialize + for<'a> Deserialize<'a>;
+    fn to_db(val: Self) -> impl std::future::Future<Output = Self::DbModel> + Send;
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -26,8 +30,20 @@ pub enum TokenVersion {
 pub struct RefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub family: Uuid,
     pub scopes: Vec<Scope>,
     pub valid: bool,
+    #[serde(with = "ts_seconds")]
+    pub exp: DateTime<Utc>,
+    pub version: TokenVersion,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct RefreshTokenDB {
+    pub id: String,
+    pub valid: bool,
+    pub family: String,
+    pub scopes: Vec<Scope>,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
     pub version: TokenVersion,
@@ -38,15 +54,41 @@ pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
-impl<'a> Model<'a> for RefreshToken {
-    const TABLE: &'a str = "corvus_auth";
+impl Model for RefreshToken {
+    const TABLE: &'static str = "corvus_auth";
+    type DbModel = RefreshTokenDB;
+
+    async fn to_db(val: Self) -> Self::DbModel {
+        let id = hash_string(&val.id.to_string(), SaltString::from_b64(&SECRET).unwrap())
+            .await
+            .unwrap();
+        let family = hash_string(
+            &val.family.to_string(),
+            SaltString::from_b64(&SECRET).unwrap(),
+        )
+        .await
+        .unwrap();
+        RefreshTokenDB {
+            id: id.0,
+            family: family.0,
+            scopes: val.scopes,
+            valid: val.valid,
+            exp: val.exp,
+            version: val.version,
+        }
+    }
 }
 
 impl RefreshToken {
     pub async fn default(user_id: Uuid, scopes: Vec<Scope>) -> Result<Self> {
+        RefreshToken::new(user_id, Uuid::new_v4(), scopes).await
+    }
+
+    pub async fn new(user_id: Uuid, family: Uuid, scopes: Vec<Scope>) -> Result<Self> {
         let r = RefreshToken {
             id: Uuid::new_v4(),
             user_id,
+            family,
             valid: true,
             scopes,
             exp: Utc::now().add(chrono::Duration::days(7)),
@@ -133,7 +175,7 @@ impl RefreshToken {
 
 pub type Scopes = Vec<Scope>;
 
-#[derive(Deserialize, Serialize, Clone, EnumIter, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, EnumIter, PartialEq, Eq, Debug)]
 pub enum Scope {
     Invalid,
     GetUserID,
@@ -182,7 +224,7 @@ impl AuthToken {
     pub async fn default(token: &RefreshToken) -> Self {
         Self {
             user_id: token.user_id.to_owned(),
-            family: token.id.to_owned(),
+            family: token.family.to_owned(),
             scopes: token.scopes.to_owned(),
             exp: Utc::now().add(chrono::Duration::hours(2)),
         }
@@ -327,8 +369,13 @@ impl std::fmt::Debug for User {
     }
 }
 
-impl<'a> Model<'a> for User {
-    const TABLE: &'a str = "corvus-users";
+impl Model for User {
+    const TABLE: &'static str = "corvus-users";
+    type DbModel = Self;
+
+    async fn to_db(val: Self) -> Self::DbModel {
+        val
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -394,8 +441,13 @@ impl Application {
     }
 }
 
-impl<'a> Model<'a> for Application {
-    const TABLE: &'a str = "corvus-apps";
+impl Model for Application {
+    const TABLE: &'static str = "corvus-apps";
+    type DbModel = Self;
+
+    async fn to_db(val: Self) -> Self::DbModel {
+        val
+    }
 }
 
 impl From<Application> for ApplicationResponse {

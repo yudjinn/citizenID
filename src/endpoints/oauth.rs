@@ -70,7 +70,7 @@ async fn reroute(
     {
         app_request.request_for.unwrap()
     } else {
-        let t = application.callback_uris.get(0).unwrap().to_owned();
+        let t = application.callback_uris.first().unwrap().to_owned();
         t
     };
 

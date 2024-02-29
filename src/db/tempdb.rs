@@ -85,9 +85,9 @@ pub async fn init_db() -> Result<()> {
 pub async fn get_item_from_table_with_filter_by_index<T>(
     column_name: &str,
     value: &str,
-) -> Result<Option<T>>
+) -> Result<Option<T::DbModel>>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
     let req = client
@@ -103,8 +103,8 @@ where
     let result = req.send().await?;
 
     if let Some(items) = result.items {
-        let t: Vec<T> = from_items(items)?;
-        if let Some(ret) = t.get(0) {
+        let t: Vec<T::DbModel> = from_items(items)?;
+        if let Some(ret) = t.first() {
             return Ok(Some(ret.clone()));
         }
     }
@@ -116,7 +116,7 @@ pub async fn get_all_from_table_with_filter_by_index<T>(
     value: &str,
 ) -> Result<Vec<T>>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
     let req = client
@@ -142,7 +142,7 @@ where
 
 pub async fn get_item_from_table_with_filter_by_id<T>(value: &str) -> Result<Option<T>>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
     let req = client
@@ -156,14 +156,14 @@ where
     if let Some(items) = result.items {
         let t: Vec<T> = from_items(items)?;
         let ret: T = t
-            .get(0)
+            .first()
             .ok_or(Error::msg(format!(
                 "Item [{}]<{}> was not found.",
                 std::any::type_name::<T>(),
                 value
             )))?
             .clone();
-        Ok(Some(ret))
+        Ok(Some(ret.clone()))
     } else {
         Ok(None)
     }
@@ -171,7 +171,7 @@ where
 
 pub async fn put_item<T>(item: T) -> Result<T>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
 
@@ -185,7 +185,7 @@ where
 
 pub async fn delete_item<T>(id: Uuid) -> Result<()>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     let client = get_or_init().await;
 
@@ -200,7 +200,7 @@ where
 
 pub async fn update_item<T>(id: Uuid, item: T) -> Result<T>
 where
-    T: for<'a> Model<'a> + Serialize + for<'a> Deserialize<'a> + Clone,
+    T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
     if let Ok(Some(_)) = get_item_from_table_with_filter_by_id::<T>(&id.to_string()).await {
         let client = get_or_init().await;
