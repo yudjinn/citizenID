@@ -16,7 +16,11 @@ pub mod utils;
 
 lazy_static! {
     static ref SECRET: String = std::env::var_os("SECRET_KEY")
-        .unwrap_or("DEVKEY".into())
+        .unwrap_or("3)1dxd-#t50&ta-5p(e4(_dw8a(dk#%)k7u4tvf-63_i-a_-ss".into())
+        .into_string()
+        .unwrap();
+    static ref SALT: String = std::env::var_os("SALT_KEY")
+        .unwrap_or("p^vzc^j46n#jr6x8".into())
         .into_string()
         .unwrap();
     static ref KEYS: endpoints::login::Keys = Keys::new(SECRET.as_bytes());

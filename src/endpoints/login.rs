@@ -9,7 +9,9 @@ use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AuthToken, LoginUser, Model, RefreshToken, RefreshTokenRequest, Scope, User};
+use crate::model::{
+    AuthToken, LoginUser, Model, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User,
+};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
 use crate::{db_handler, utils::check_hash};
@@ -102,23 +104,25 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
-    if let Some(mut refresh_token) =
-        db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(
-            &auth_token.family.to_string(),
-        )
-        .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)?
+    match db_handler::get_item_from_table_with_filter_by_index::<RefreshTokenDB>(
+        "family",
+        &auth_token.family.to_string(),
+    )
+    .await
+    .map_err(ApiResponse::InternalServerErrorWithMessage)?
     {
-        // nuke the token
-        refresh_token
-            .invalidate()
-            .await
-            .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+        refresh_tokens => {
+            // nuke the token
+            refresh_tokens
+                .unwrap()
+                .invalidate()
+                .await
+                .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
-        println!("3");
-        Ok(())
-    } else {
-        Err(ApiResponse::InternalServerError)
+            println!("3");
+            Ok(())
+        }
+        _ => Err(ApiResponse::InternalServerError),
     }
 }
 
@@ -128,13 +132,13 @@ async fn get_new_token(
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-    match db_handler::get_item_from_table_with_filter_by_id::<RefreshToken>(
-        &RefreshToken::to_db(token).await.family,
-    )
-    .await
+    // TODO: this should use the hashed token to find
+    match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.id.to_string())
+        .await
     {
-        Ok(Some(mut token)) => {
-            if token.valid {
+        Ok(Some(t)) => {
+            let mut token = token;
+            if t.valid {
                 let (r, a) = generate_token_pair(token.user_id, Some(token.family), Scope::all())
                     .await
                     .map_err(|_| ApiResponse::InternalServerError)?;
@@ -153,6 +157,10 @@ async fn get_new_token(
                     refresh_token: signed_ref_token,
                 }))
             } else {
+                // Might be a rewind attack, invalidate family
+                RefreshToken::invalidate_all_for_family(token.family)
+                    .await
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
                 Err(ApiResponse::Unauthorized)
             }
         }

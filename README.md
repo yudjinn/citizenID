@@ -16,7 +16,7 @@ aws_secret_access_key = localstacksecret
 
 Test User:
 test@email.co
-password
+password3
 
 ## TODO:
 - [ ] Refactor codebase -- use something like [this](https://www.youtube.com/watch?v=zUxF0kvydJs)

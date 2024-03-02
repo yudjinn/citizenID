@@ -85,7 +85,7 @@ pub async fn init_db() -> Result<()> {
 pub async fn get_item_from_table_with_filter_by_index<T>(
     column_name: &str,
     value: &str,
-) -> Result<Option<T::DbModel>>
+) -> Result<Option<T>>
 where
     T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
@@ -103,7 +103,7 @@ where
     let result = req.send().await?;
 
     if let Some(items) = result.items {
-        let t: Vec<T::DbModel> = from_items(items)?;
+        let t: Vec<T> = from_items(items)?;
         if let Some(ret) = t.first() {
             return Ok(Some(ret.clone()));
         }
@@ -175,10 +175,10 @@ where
 {
     let client = get_or_init().await;
 
-    let i = to_item(Model::to_db(item.clone()).await)?;
+    let i = to_item(item.clone())?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
-    if std::any::type_name::<T>() == std::any::type_name::<RefreshTokenRequest>() {
+    if std::any::type_name::<T>() == std::any::type_name::<RefreshTokenDB>() {
         // set TTL
     }
     let _resp = request.send().await?;
@@ -201,7 +201,7 @@ where
     Ok(())
 }
 
-pub async fn update_item<T>(id: Uuid, item: T) -> Result<T>
+pub async fn update_item<T>(id: String, item: T) -> Result<T>
 where
     T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {

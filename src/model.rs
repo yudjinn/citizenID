@@ -2,6 +2,7 @@ use std::ops::Add;
 
 use anyhow::Result;
 use argon2::password_hash::SaltString;
+
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
@@ -12,12 +13,10 @@ use uuid::Uuid;
 
 use crate::utils::hash_string;
 use crate::{db_handler, utils::hash_password};
-use crate::{KEYS, SECRET};
+use crate::{KEYS, SALT, SECRET};
 
 pub trait Model {
     const TABLE: &'static str;
-    type DbModel: Clone + Serialize + for<'a> Deserialize<'a>;
-    fn to_db(val: Self) -> impl std::future::Future<Output = Self::DbModel> + Send;
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -41,6 +40,7 @@ pub struct RefreshToken {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RefreshTokenDB {
     pub id: String,
+    pub user_id: Uuid,
     pub valid: bool,
     pub family: String,
     pub scopes: Vec<Scope>,
@@ -54,27 +54,113 @@ pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
-impl Model for RefreshToken {
-    const TABLE: &'static str = "corvus_auth";
-    type DbModel = RefreshTokenDB;
-
-    async fn to_db(val: Self) -> Self::DbModel {
-        let id = hash_string(&val.id.to_string(), SaltString::from_b64(&SECRET).unwrap())
-            .await
-            .unwrap();
-        let family = hash_string(
-            &val.family.to_string(),
-            SaltString::from_b64(&SECRET).unwrap(),
-        )
-        .await
-        .unwrap();
+impl From<RefreshToken> for RefreshTokenDB {
+    fn from(value: RefreshToken) -> Self {
+        // TODO: need to hash this, uses user id too
+        let id = value.id;
         RefreshTokenDB {
-            id: id.0,
-            family: family.0,
-            scopes: val.scopes,
-            valid: val.valid,
-            exp: val.exp,
-            version: val.version,
+            id: id.to_string(),
+            user_id: value.user_id,
+            family: value.family.to_string(),
+            scopes: value.scopes,
+            valid: value.valid,
+            exp: value.exp,
+            version: value.version,
+        }
+    }
+}
+
+impl From<RefreshTokenDB> for RefreshToken {
+    fn from(value: RefreshTokenDB) -> Self {
+        RefreshToken {
+            id: todo!(),
+            user_id: todo!(),
+            family: todo!(),
+            scopes: todo!(),
+            valid: todo!(),
+            exp: todo!(),
+            version: TokenVersion::V1,
+        }
+    }
+}
+
+impl Model for RefreshTokenDB {
+    const TABLE: &'static str = "corvus_auth";
+}
+
+impl RefreshTokenDB {
+    pub async fn is_valid_static(id: Uuid) -> bool {
+        if let Ok(Some(token)) =
+            db_handler::get_item_from_table_with_filter_by_id::<Self>(&id.to_string()).await
+        {
+            if !token.valid {
+                return false;
+            }
+            if token.exp >= Utc::now() {
+                return false;
+            }
+
+            if token.version != TokenVersion::default() {
+                return false;
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+    pub async fn invalidate(&mut self) -> Result<()> {
+        self.valid = false;
+        if db_handler::update_item(self.id.to_string(), self.to_owned())
+            .await
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg("Failed to invalidate."))
+        }
+    }
+
+    pub async fn invalidate_all_for_user(user_id: Uuid) -> Result<()> {
+        for mut token in db_handler::get_all_from_table_with_filter_by_index::<Self>(
+            "user_id",
+            &user_id.to_string(),
+        )
+        .await?
+        {
+            token.valid = false;
+            let _ = db_handler::update_item(token.id.clone(), token.to_owned()).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn invalidate_all_for_family(family: Uuid) -> Result<()> {
+        for mut token in db_handler::get_all_from_table_with_filter_by_index::<Self>(
+            "family",
+            &family.to_string(),
+        )
+        .await?
+        {
+            token.valid = false;
+            let _ = db_handler::update_item(token.id.clone(), token.to_owned()).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn invalidate_static(id: Uuid) -> Result<()> {
+        //TODO: hashing stuffs
+        let id = id.to_string();
+        if let Ok(Some(mut token)) =
+            db_handler::get_item_from_table_with_filter_by_id::<Self>(&id).await
+        {
+            token.valid = false;
+            if db_handler::update_item(id, token).await.is_ok() {
+                Ok(())
+            } else {
+                Err(anyhow::Error::msg("Failed to invalidate."))
+            }
+        } else {
+            Err(anyhow::Error::msg("Could not find token."))
         }
     }
 }
@@ -95,9 +181,9 @@ impl RefreshToken {
             version: TokenVersion::default(),
         };
 
-        let res = db_handler::put_item::<Self>(r).await?;
+        let _res = db_handler::put_item::<RefreshTokenDB>(r.clone().into()).await?;
 
-        Ok(res)
+        Ok(r)
     }
 
     pub async fn from_header_str(s: &str) -> Result<Self> {
@@ -108,43 +194,21 @@ impl RefreshToken {
     }
 
     pub async fn invalidate(&mut self) -> Result<()> {
-        self.valid = false;
-        if db_handler::update_item(self.id, self.to_owned())
+        Into::<RefreshTokenDB>::into(self.clone())
+            .invalidate()
             .await
-            .is_ok()
-        {
-            Ok(())
-        } else {
-            Err(anyhow::Error::msg("Failed to invalidate."))
-        }
     }
 
     pub async fn invalidate_all_for_user(user_id: Uuid) -> Result<()> {
-        for mut token in db_handler::get_all_from_table_with_filter_by_index::<Self>(
-            "user_id",
-            &user_id.to_string(),
-        )
-        .await?
-        {
-            token.valid = false;
-            let _ = db_handler::update_item(token.id, token.to_owned()).await?;
-        }
-        Ok(())
+        RefreshTokenDB::invalidate_all_for_user(user_id).await
+    }
+
+    pub async fn invalidate_all_for_family(family: Uuid) -> Result<()> {
+        RefreshTokenDB::invalidate_all_for_family(family).await
     }
 
     pub async fn invalidate_static(id: Uuid) -> Result<()> {
-        if let Ok(Some(mut token)) =
-            db_handler::get_item_from_table_with_filter_by_id::<Self>(&id.to_string()).await
-        {
-            token.valid = false;
-            if db_handler::update_item(id, token).await.is_ok() {
-                Ok(())
-            } else {
-                Err(anyhow::Error::msg("Failed to invalidate."))
-            }
-        } else {
-            Err(anyhow::Error::msg("Could not find token."))
-        }
+        RefreshTokenDB::invalidate_static(id).await
     }
 
     pub async fn is_valid(&self) -> bool {
@@ -152,24 +216,7 @@ impl RefreshToken {
     }
 
     pub async fn is_valid_static(id: Uuid) -> bool {
-        if let Ok(Some(token)) =
-            db_handler::get_item_from_table_with_filter_by_id::<Self>(&id.to_string()).await
-        {
-            if !token.valid {
-                return false;
-            }
-            if token.exp >= Utc::now() {
-                return false;
-            }
-
-            if token.version != TokenVersion::default() {
-                return false;
-            }
-
-            true
-        } else {
-            false
-        }
+        RefreshTokenDB::is_valid_static(id).await
     }
 }
 
@@ -338,9 +385,9 @@ impl User {
     pub async fn get_auth_user(auth_token: &str) -> Result<Option<Self>> {
         match AuthToken::from_header_str(auth_token).await {
             Ok(at) => {
-                if let Ok(Some(token)) = db_handler::get_item_from_table_with_filter_by_id::<
-                    RefreshToken,
-                >(&at.family.to_string())
+                if let Ok(Some(token)) = db_handler::get_item_from_table_with_filter_by_index::<
+                    RefreshTokenDB,
+                >("family", &at.family.to_string())
                 .await
                 {
                     if token.valid {
@@ -371,11 +418,6 @@ impl std::fmt::Debug for User {
 
 impl Model for User {
     const TABLE: &'static str = "corvus-users";
-    type DbModel = Self;
-
-    async fn to_db(val: Self) -> Self::DbModel {
-        val
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -443,11 +485,6 @@ impl Application {
 
 impl Model for Application {
     const TABLE: &'static str = "corvus-apps";
-    type DbModel = Self;
-
-    async fn to_db(val: Self) -> Self::DbModel {
-        val
-    }
 }
 
 impl From<Application> for ApplicationResponse {

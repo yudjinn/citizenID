@@ -51,7 +51,7 @@ async fn get_user(
 async fn delete_user(Extension(current_user): Extension<User>) -> Result<(), ApiResponse> {
     let mut user = current_user.clone();
     user.status = UserStatus::Inactive;
-    match db_handler::update_item::<User>(current_user.id, user).await {
+    match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
         Ok(_) => Ok(()),
         Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
     }
@@ -103,7 +103,7 @@ async fn update_user(
                     .await
                     .map_err(ApiResponse::InternalServerErrorWithMessage)?;
             }
-            match db_handler::update_item::<User>(current_user.id, obj).await {
+            match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
                 Ok(u) => Ok(Json(u.into())),
                 Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
             }
