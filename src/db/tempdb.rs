@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{any::TypeId, collections::HashMap};
 
 use anyhow::{Error, Result};
 use aws_sdk_dynamodb::{
@@ -14,7 +14,7 @@ use serde_dynamo::aws_sdk_dynamodb_0_33::{from_items, to_item};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-use crate::model::Model;
+use crate::model::{Model, RefreshToken, RefreshTokenDB, RefreshTokenRequest};
 
 pub static LOCAL_DB: OnceCell<Client> = OnceCell::const_new();
 
@@ -175,9 +175,12 @@ where
 {
     let client = get_or_init().await;
 
-    let i = to_item(item.clone())?;
+    let i = to_item(Model::to_db(item.clone()).await)?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
+    if std::any::type_name::<T>() == std::any::type_name::<RefreshTokenRequest>() {
+        // set TTL
+    }
     let _resp = request.send().await?;
 
     Ok(item)
