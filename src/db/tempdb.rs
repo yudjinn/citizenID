@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{collections::HashMap};
 
 use anyhow::{Error, Result};
 use aws_sdk_dynamodb::{
@@ -14,7 +14,7 @@ use serde_dynamo::aws_sdk_dynamodb_0_33::{from_items, to_item};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-use crate::model::{Model, RefreshToken, RefreshTokenDB, RefreshTokenRequest};
+use crate::model::{Model, RefreshTokenDB};
 
 pub static LOCAL_DB: OnceCell<Client> = OnceCell::const_new();
 

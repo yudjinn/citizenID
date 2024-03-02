@@ -10,7 +10,7 @@ use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    AuthToken, LoginUser, Model, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User,
+    AuthToken, LoginUser, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User,
 };
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;

@@ -1,7 +1,7 @@
 use std::ops::Add;
 
 use anyhow::Result;
-use argon2::password_hash::SaltString;
+
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
@@ -11,9 +11,9 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
-use crate::utils::hash_string;
+
 use crate::{db_handler, utils::hash_password};
-use crate::{KEYS, SALT, SECRET};
+use crate::{KEYS};
 
 pub trait Model {
     const TABLE: &'static str;
@@ -71,7 +71,7 @@ impl From<RefreshToken> for RefreshTokenDB {
 }
 
 impl From<RefreshTokenDB> for RefreshToken {
-    fn from(value: RefreshTokenDB) -> Self {
+    fn from(_value: RefreshTokenDB) -> Self {
         RefreshToken {
             id: todo!(),
             user_id: todo!(),
