@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use anyhow::{Error, Result};
 use aws_sdk_dynamodb::{

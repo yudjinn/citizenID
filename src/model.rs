@@ -1,25 +1,25 @@
+use core::fmt;
 use std::ops::Add;
 
 use anyhow::Result;
-
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
-
+use crate::KEYS;
 use crate::{db_handler, utils::hash_password};
-use crate::{KEYS};
 
 pub trait Model {
     const TABLE: &'static str;
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TokenVersion {
     #[default]
     V1,
@@ -42,7 +42,7 @@ pub struct RefreshTokenDB {
     pub id: String,
     pub user_id: Uuid,
     pub valid: bool,
-    pub family: String,
+    pub family: Uuid,
     pub scopes: Vec<Scope>,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
@@ -56,30 +56,15 @@ pub struct RefreshTokenRequest {
 
 impl From<RefreshToken> for RefreshTokenDB {
     fn from(value: RefreshToken) -> Self {
-        // TODO: need to hash this, uses user id too
-        let id = value.id;
+        let id = value.hash();
         RefreshTokenDB {
-            id: id.to_string(),
+            id,
             user_id: value.user_id,
-            family: value.family.to_string(),
+            family: value.family,
             scopes: value.scopes,
             valid: value.valid,
             exp: value.exp,
             version: value.version,
-        }
-    }
-}
-
-impl From<RefreshTokenDB> for RefreshToken {
-    fn from(_value: RefreshTokenDB) -> Self {
-        RefreshToken {
-            id: todo!(),
-            user_id: todo!(),
-            family: todo!(),
-            scopes: todo!(),
-            valid: todo!(),
-            exp: todo!(),
-            version: TokenVersion::V1,
         }
     }
 }
@@ -146,26 +131,27 @@ impl RefreshTokenDB {
         }
         Ok(())
     }
-
-    pub async fn invalidate_static(id: Uuid) -> Result<()> {
-        //TODO: hashing stuffs
-        let id = id.to_string();
-        if let Ok(Some(mut token)) =
-            db_handler::get_item_from_table_with_filter_by_id::<Self>(&id).await
-        {
-            token.valid = false;
-            if db_handler::update_item(id, token).await.is_ok() {
-                Ok(())
-            } else {
-                Err(anyhow::Error::msg("Failed to invalidate."))
-            }
-        } else {
-            Err(anyhow::Error::msg("Could not find token."))
-        }
-    }
 }
 
 impl RefreshToken {
+    pub fn hash(&self) -> String {
+        let mut obj = String::new();
+        obj += &self.id.to_string();
+        obj += &self.user_id.to_string();
+        obj += &self.family.to_string();
+        for s in &self.scopes {
+            obj += &format!("SCOPE.{}", s);
+        }
+        obj += &self.valid.to_string();
+        obj += &self.exp.to_string();
+        obj += &format!("{:?}", self.version);
+
+        let mut hasher = Sha256::new();
+        hasher.update(obj);
+        let result = hasher.finalize();
+        String::from_utf8_lossy(&result[..]).to_string()
+    }
+
     pub async fn default(user_id: Uuid, scopes: Vec<Scope>) -> Result<Self> {
         RefreshToken::new(user_id, Uuid::new_v4(), scopes).await
     }
@@ -207,10 +193,6 @@ impl RefreshToken {
         RefreshTokenDB::invalidate_all_for_family(family).await
     }
 
-    pub async fn invalidate_static(id: Uuid) -> Result<()> {
-        RefreshTokenDB::invalidate_static(id).await
-    }
-
     pub async fn is_valid(&self) -> bool {
         Self::is_valid_static(self.id).await
     }
@@ -239,6 +221,18 @@ impl From<String> for Scope {
             "rsi" => Self::GetRSIID,
             "full" => Self::GetUserFull,
             _ => Self::Invalid,
+        }
+    }
+}
+
+impl fmt::Display for Scope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Scope::Invalid => write!(f, "invalid"),
+            Scope::GetUserID => write!(f, "getUserID"),
+            Scope::GetRSIID => write!(f, "getRsiID"),
+            Scope::GetDiscordID => write!(f, "getDiscordID"),
+            Scope::GetUserFull => write!(f, "getUserFull"),
         }
     }
 }
@@ -273,7 +267,7 @@ impl AuthToken {
             user_id: token.user_id.to_owned(),
             family: token.family.to_owned(),
             scopes: token.scopes.to_owned(),
-            exp: Utc::now().add(chrono::Duration::hours(2)),
+            exp: Utc::now().add(chrono::Duration::minutes(30)),
         }
     }
 
@@ -385,24 +379,10 @@ impl User {
     pub async fn get_auth_user(auth_token: &str) -> Result<Option<Self>> {
         match AuthToken::from_header_str(auth_token).await {
             Ok(at) => {
-                if let Ok(Some(token)) = db_handler::get_item_from_table_with_filter_by_index::<
-                    RefreshTokenDB,
-                >("family", &at.family.to_string())
-                .await
-                {
-                    if token.valid {
-                        db_handler::get_item_from_table_with_filter_by_id::<User>(
-                            &token.user_id.to_string(),
-                        )
-                        .await
-                    } else {
-                        Err(anyhow::Error::msg("Token is invalid."))
-                    }
-                } else {
-                    Err(anyhow::Error::msg("Token not found."))
-                }
+                db_handler::get_item_from_table_with_filter_by_id::<User>(&at.user_id.to_string())
+                    .await
             }
-            Err(e) => Err(e),
+            Err(_) => Err(anyhow::Error::msg("Token is invalid.")),
         }
     }
 }

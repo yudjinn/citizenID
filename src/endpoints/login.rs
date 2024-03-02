@@ -104,25 +104,22 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
-    match db_handler::get_item_from_table_with_filter_by_index::<RefreshTokenDB>(
-        "family",
-        &auth_token.family.to_string(),
-    )
+    if let Some(mut refresh_token) = db_handler::get_item_from_table_with_filter_by_index::<
+        RefreshTokenDB,
+    >("family", &auth_token.family.to_string())
     .await
     .map_err(ApiResponse::InternalServerErrorWithMessage)?
     {
-        refresh_tokens => {
-            // nuke the token
-            refresh_tokens
-                .unwrap()
-                .invalidate()
-                .await
-                .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+        // nuke the token
+        refresh_token
+            .invalidate()
+            .await
+            .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
-            println!("3");
-            Ok(())
-        }
-        _ => Err(ApiResponse::InternalServerError),
+        println!("3");
+        Ok(())
+    } else {
+        Err(ApiResponse::InternalServerError)
     }
 }
 
@@ -132,10 +129,7 @@ async fn get_new_token(
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-    // TODO: this should use the hashed token to find
-    match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.id.to_string())
-        .await
-    {
+    match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash()).await {
         Ok(Some(t)) => {
             let mut token = token;
             if t.valid {
