@@ -9,9 +9,7 @@ use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{
-    AuthToken, LoginUser, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User,
-};
+use crate::model::{LoginUser, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
 use crate::{db_handler, utils::check_hash};
@@ -89,38 +87,27 @@ async fn login_with_email(
 }
 
 async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
-    let auth_header = req
+    let refresh_header = req
         .headers()
-        .get("auth_token")
+        .get("refresh_token")
         .and_then(|h| h.to_str().ok());
 
-    let auth_header = if let Some(auth_header) = auth_header {
-        auth_header
+    let refresh_header = if let Some(refresh_header) = refresh_header {
+        refresh_header
     } else {
         return Err(ApiResponse::NotFound);
     };
 
-    let auth_token = AuthToken::from_header_str(auth_header)
+    let mut refresh_token = RefreshToken::from_header_str(refresh_header)
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
 
-    if let Some(mut refresh_token) = db_handler::get_item_from_table_with_filter_by_index::<
-        RefreshTokenDB,
-    >("family", &auth_token.family.to_string())
-    .await
-    .map_err(ApiResponse::InternalServerErrorWithMessage)?
-    {
-        // nuke the token
-        refresh_token
-            .invalidate()
-            .await
-            .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-
-        println!("3");
-        Ok(())
-    } else {
-        Err(ApiResponse::InternalServerError)
-    }
+    // nuke the token
+    refresh_token
+        .invalidate()
+        .await
+        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+    Ok(())
 }
 
 async fn get_new_token(

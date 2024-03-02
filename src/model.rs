@@ -192,14 +192,6 @@ impl RefreshToken {
     pub async fn invalidate_all_for_family(family: Uuid) -> Result<()> {
         RefreshTokenDB::invalidate_all_for_family(family).await
     }
-
-    pub async fn is_valid(&self) -> bool {
-        Self::is_valid_static(self.id).await
-    }
-
-    pub async fn is_valid_static(id: Uuid) -> bool {
-        RefreshTokenDB::is_valid_static(id).await
-    }
 }
 
 pub type Scopes = Vec<Scope>;
@@ -255,7 +247,6 @@ impl Scope {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct AuthToken {
     pub user_id: Uuid,
-    pub family: Uuid,
     pub scopes: Vec<Scope>,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
@@ -265,7 +256,6 @@ impl AuthToken {
     pub async fn default(token: &RefreshToken) -> Self {
         Self {
             user_id: token.user_id.to_owned(),
-            family: token.family.to_owned(),
             scopes: token.scopes.to_owned(),
             exp: Utc::now().add(chrono::Duration::minutes(30)),
         }
@@ -276,10 +266,6 @@ impl AuthToken {
             Ok(d) => Ok(d.claims),
             Err(e) => Err(anyhow::Error::msg(format!("Could not decode token: {}", e))),
         }
-    }
-
-    pub async fn is_valid(&self) -> bool {
-        RefreshToken::is_valid_static(self.family).await
     }
 }
 
