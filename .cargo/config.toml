@@ -1,4 +1,4 @@
 # Helper alias for building production lambda
 [alias]
-build-lambda = ["build", "--release", "--target", "aarch64-unknown-linux-gnu", "--features", "lambda"]
+build-lambda = ["build", "--release", "--target", "x86_64-unknown-linux-gnu", "--features", "lambda"]
 
