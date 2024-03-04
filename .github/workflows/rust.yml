@@ -13,10 +13,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v3
     # setup caching
     - run: rustup toolchain install stable --profile minimal
     - uses: Swatinem/rust-cache@v2
       with:
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Build Application
-      run: cargo build-lambda --verbose
+      run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --features lambda
