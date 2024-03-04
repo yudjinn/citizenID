@@ -202,7 +202,7 @@ pub enum Scope {
     GetUserID,
     GetRSIID,
     GetDiscordID,
-    GetUserFull,
+    UserFull,
 }
 
 impl From<String> for Scope {
@@ -211,7 +211,7 @@ impl From<String> for Scope {
             "user" => Self::GetUserID,
             "discord" => Self::GetDiscordID,
             "rsi" => Self::GetRSIID,
-            "full" => Self::GetUserFull,
+            "full" => Self::UserFull,
             _ => Self::Invalid,
         }
     }
@@ -224,7 +224,7 @@ impl fmt::Display for Scope {
             Scope::GetUserID => write!(f, "getUserID"),
             Scope::GetRSIID => write!(f, "getRsiID"),
             Scope::GetDiscordID => write!(f, "getDiscordID"),
-            Scope::GetUserFull => write!(f, "getUserFull"),
+            Scope::UserFull => write!(f, "getUserFull"),
         }
     }
 }

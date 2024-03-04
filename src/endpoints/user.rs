@@ -6,7 +6,9 @@ use axum::{
 
 use crate::{
     db_handler,
-    model::{CreateUserEmail, RefreshToken, Scopes, UpdateUser, User, UserResponse, UserStatus},
+    model::{
+        CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User, UserResponse, UserStatus,
+    },
     utils::{hash_password, ApiResponse},
 };
 
@@ -32,28 +34,47 @@ async fn get_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
-    // TODO make all tokens have a scope, and scope changes what info is returned here
-    // Regular login -> tokin with full scope
-    // Oauth -> just id/rsi_id/status?
-    match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+        // Regular login -> tokin with full scope
+        // Oauth -> just id/rsi_id/status?
+        match db_handler::get_item_from_table_with_filter_by_id::<User>(
+            &current_user.id.to_string(),
+        )
         .await
-    {
-        Ok(Some(user)) => {
-            let user_resp = user.clone();
+        {
+            Ok(Some(user)) => {
+                if user.status != UserStatus::Inactive && user.status != UserStatus::Unknown {
+                    let user_resp = user.clone();
 
-            Ok(Json(user_resp.into()))
+                    Ok(Json(user_resp.into()))
+                } else {
+                    Err(ApiResponse::Unauthorized)
+                }
+            }
+            Ok(None) => Err(ApiResponse::NotFound),
+            Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
         }
-        Ok(None) => Err(ApiResponse::NotFound),
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+    } else {
+        Err(ApiResponse::Unauthorized)
     }
 }
 
-async fn delete_user(Extension(current_user): Extension<User>) -> Result<(), ApiResponse> {
-    let mut user = current_user.clone();
-    user.status = UserStatus::Inactive;
-    match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
-        Ok(_) => Ok(()),
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+async fn delete_user(
+    Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
+) -> Result<(), ApiResponse> {
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+        let mut user = current_user.clone();
+        user.status = UserStatus::Inactive;
+        match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
+            Ok(_) => match RefreshToken::invalidate_all_for_user(current_user.id).await {
+                Ok(_) => Ok(()),
+                Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+            },
+            Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+        }
+    } else {
+        Err(ApiResponse::Unauthorized)
     }
 }
 
@@ -76,39 +97,46 @@ async fn create_user_from_email(
 
 async fn update_user(
     Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
     update: Json<UpdateUser>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
     // check the item doesnt already exist
-    match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+        match db_handler::get_item_from_table_with_filter_by_id::<User>(
+            &current_user.id.to_string(),
+        )
         .await
-    {
-        Ok(Some(mut obj)) => {
-            let mut invalidate = false;
-            if let Some(e) = update.email.clone() {
-                obj.email = Some(e);
-                invalidate = true;
-            }
-            if let Some(p) = update.password.clone() {
-                match hash_password(&p).await {
-                    Ok((h, s)) => {
-                        obj.hashed_password = Some(h);
-                        obj.salt = Some(s);
-                        invalidate = true;
+        {
+            Ok(Some(mut obj)) => {
+                let mut invalidate = false;
+                if let Some(e) = update.email.clone() {
+                    obj.email = Some(e);
+                    invalidate = true;
+                }
+                if let Some(p) = update.password.clone() {
+                    match hash_password(&p).await {
+                        Ok((h, s)) => {
+                            obj.hashed_password = Some(h);
+                            obj.salt = Some(s);
+                            invalidate = true;
+                        }
+                        Err(e) => return Err(ApiResponse::InternalServerErrorWithMessage(e)),
                     }
-                    Err(e) => return Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                }
+                if invalidate {
+                    RefreshToken::invalidate_all_for_user(current_user.id)
+                        .await
+                        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                }
+                match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
+                    Ok(u) => Ok(Json(u.into())),
+                    Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
                 }
             }
-            if invalidate {
-                RefreshToken::invalidate_all_for_user(current_user.id)
-                    .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-            }
-            match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
-                Ok(u) => Ok(Json(u.into())),
-                Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
-            }
+            Ok(None) => Err(ApiResponse::NotFound),
+            Err(_) => Err(ApiResponse::InternalServerError),
         }
-        Ok(None) => Err(ApiResponse::NotFound),
-        Err(_) => Err(ApiResponse::InternalServerError),
+    } else {
+        Err(ApiResponse::Unauthorized)
     }
 }
