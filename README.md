@@ -1,3 +1,4 @@
+[![Corvus Backend](https://github.com/sc-corvus/citizenID/actions/workflows/rust.yml/badge.svg)](https://github.com/sc-corvus/citizenID/actions/workflows/rust.yml)
 
 ## Dev
 For local db:
