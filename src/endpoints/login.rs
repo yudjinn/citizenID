@@ -150,10 +150,7 @@ async fn get_new_token(
     }
 }
 
-pub async fn auth_middleware(
-    mut req: Request<Body>,
-    next: Next<Body>,
-) -> Result<Response, ApiResponse> {
+pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()
         .get("auth_token")

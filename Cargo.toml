@@ -8,35 +8,37 @@ edition = "2021"
 tempdb = []
 dynamodb = []
 lambda = ["dynamodb"]
-default = ["tempdb"]
+# default = ["tempdb"]
+default = ["lambda"]
 
 
 [dependencies]
-anyhow = "1.0.75"
-argon2 = { version = "0.5.2", features = ["std"] }
+anyhow = "1.0.80"
+argon2 = { version = "0.5.3", features = ["std"] }
 aws-config = "0.56.1"
 aws-sdk-dynamodb = { version = "0.33.0", features = ["rt-tokio"] }
-axum = { version = "0.6.20", features = ["headers", "macros", "multipart"] }
+axum = { version = "0.7.4", features = [ "macros", "multipart"] }
 base64 = "0.22.0"
-chrono = { version = "0.4.31", features = ["serde"] }
+chrono = { version = "0.4.34", features = ["serde"] }
 color-eyre = "0.6.2"
 hmac = { version = "0.12.1", features = ["std"] }
-http = "1.0.0"
-hyper = "1.0.1"
-jsonwebtoken = "9.1.0"
+http = "1.1.0"
+hyper = "1.2.0"
+jsonwebtoken = "9.2.0"
 lambda_http = "0.10.0"
+lambda_runtime = "0.10.0"
 lazy_static = "1.4.0"
-serde = { version = "1.0.190", features = ["derive"] }
-serde_dynamo = { version = "4.2.7", features = ["aws-sdk-dynamodb+0_33"] }
-serde_with = { version = "3.4.0", features = ["json"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_dynamo = { version = "4.2.13", features = ["aws-sdk-dynamodb+0_33"] }
+serde_with = { version = "3.6.1", features = ["json"] }
 sha2 = "0.10.8"
 strum = { version = "0.25.0", features = ["derive"] }
 strum_macros = "0.25.3"
-time = { version = "0.3.30", features = ["serde"] }
-tokio = { version = "1.33.0", features = ["rt-multi-thread", "macros"] }
-tower-http = { version = "0.4", features = ["cors", "compression-gzip", "compression-deflate", "trace"] }
+time = { version = "0.3.34", features = ["serde"] }
+tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros"] }
+tower-http = { version = "0.5.2", features = ["cors", "trace"] }
 tracing = "0.1.40"
-tracing-subscriber = {version="0.3.17", features= ["env-filter"]}
-uuid = { version = "1.5.0", features = ["serde", "v4"] }
+tracing-subscriber = {version="0.3.18", features= ["env-filter"]}
+uuid = { version = "1.7.0", features = ["serde", "v4"] }
 
 

@@ -94,7 +94,7 @@ async fn main() -> Result<(), RuntimeError> {
     #[cfg(feature = "lambda")]
     // todo https://github.com/awslabs/aws-lambda-rust-runtime/blob/main/examples/http-axum/src/main.rs
     {
-        lambda_http::run(app).await?;
+        lambda_http::run(app).await.unwrap();
     }
     Ok(())
 }

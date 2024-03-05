@@ -1,8 +1,10 @@
 use axum::{
     body::Body,
     extract::Path,
-    headers::{Cookie, HeaderMapExt},
-    http::{header::SET_COOKIE, HeaderMap, HeaderValue, Request},
+    http::{
+        header::{COOKIE, SET_COOKIE},
+        HeaderMap, HeaderValue, Request,
+    },
     middleware::{self, Next},
     response::{Redirect, Response},
     routing::get,
@@ -35,8 +37,8 @@ async fn test_token(
     Path(application_id): Path<Uuid>,
     req: Request<Body>,
 ) -> Result<String, ApiResponse> {
-    let cookie = req.headers().typed_get::<Cookie>().unwrap();
-    let auth = cookie.get("corvus_auth").unwrap().to_owned();
+    let cookie = req.headers().get(COOKIE).unwrap();
+    let auth = cookie.to_str().unwrap().to_owned();
     let application = db_handler::get_item_from_table_with_filter_by_id::<Application>(
         &application_id.to_string(),
     )
@@ -99,10 +101,7 @@ async fn reroute(
 // Params: application id, `corvus-auth` key
 // Returns: Authkey tied to user (using scopes)
 
-pub async fn oauth_middleware(
-    mut req: Request<Body>,
-    next: Next<Body>,
-) -> Result<Response, ApiResponse> {
+pub async fn oauth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let corvus_key = if let Some(corvus_key) = get_header("corvus_key", &req) {
         corvus_key
     } else {
