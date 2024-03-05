@@ -84,11 +84,10 @@ async fn main() -> Result<(), RuntimeError> {
 
     #[cfg(not(feature = "lambda"))]
     {
-        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
+        let addr = tokio::net::TcpListener::bind("127.0.0.1:3000")
             .await
             .unwrap();
+        axum::serve(addr, app).await.unwrap();
     }
 
     #[cfg(feature = "lambda")]

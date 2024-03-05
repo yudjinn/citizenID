@@ -1,15 +1,13 @@
 use axum::{
     body::Body,
     extract::Path,
-    http::{
-        header::{COOKIE, SET_COOKIE},
-        HeaderMap, HeaderValue, Request,
-    },
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, Request},
     middleware::{self, Next},
     response::{Redirect, Response},
     routing::get,
     Extension, Router,
 };
+use axum_extra::extract::CookieJar;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use uuid::Uuid;
 
@@ -35,10 +33,9 @@ pub fn get_router() -> Router {
 
 async fn test_token(
     Path(application_id): Path<Uuid>,
-    req: Request<Body>,
+    jar: CookieJar,
 ) -> Result<String, ApiResponse> {
-    let cookie = req.headers().get(COOKIE).unwrap();
-    let auth = cookie.to_str().unwrap().to_owned();
+    let auth = jar.get("corvus_auth").unwrap().value().to_owned();
     let application = db_handler::get_item_from_table_with_filter_by_id::<Application>(
         &application_id.to_string(),
     )
