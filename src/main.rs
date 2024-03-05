@@ -39,8 +39,8 @@ type RuntimeError = hyper::Error;
 #[cfg(feature = "lambda")]
 type RuntimeError = lambda_http::Error;
 
-async fn ping() -> String {
-    "pong".into()
+async fn health() -> String {
+    "Healthy!".into()
 }
 
 #[tokio::main]
@@ -75,7 +75,7 @@ async fn main() -> Result<(), RuntimeError> {
         .allow_origin(cors_origins);
 
     let app = Router::new()
-        .route("/ping", get(ping))
+        .route("/health", get(health))
         .nest("/user", endpoints::user::get_router())
         .nest("/applications", endpoints::apps::get_router())
         .nest("/oauth", endpoints::oauth::get_router())
