@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 pub mod endpoints;
 pub mod error;
 pub mod model;
@@ -72,7 +72,7 @@ async fn main() -> Result<(), RuntimeError> {
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ])
         .allow_credentials(true)
-        .allow_origin(cors_origins);
+        .allow_origin(AllowOrigin::any());
 
     let app = Router::new()
         .route("/health", get(health))
