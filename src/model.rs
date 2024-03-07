@@ -1,7 +1,7 @@
 use core::fmt;
 use std::ops::Add;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
@@ -12,8 +12,8 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
-use crate::KEYS;
 use crate::{db_handler, utils::hash_password};
+use crate::{KEYS, MASTER_APP_ID};
 
 pub trait Model {
     const TABLE: &'static str;
@@ -25,10 +25,24 @@ pub enum TokenVersion {
     V1,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ApprovedApplication {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub app_id: Uuid,
+    pub app_name: String,
+    pub scopes: Scopes,
+}
+
+impl Model for ApprovedApplication {
+    const TABLE: &'static str = "corvus_approvals";
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub app_id: Uuid,
     pub family: Uuid,
     pub scopes: Vec<Scope>,
     pub valid: bool,
@@ -41,6 +55,7 @@ pub struct RefreshToken {
 pub struct RefreshTokenDB {
     pub id: String,
     pub user_id: Uuid,
+    pub app_id: Uuid,
     pub valid: bool,
     pub family: Uuid,
     pub scopes: Vec<Scope>,
@@ -52,6 +67,7 @@ pub struct RefreshTokenDB {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RefreshTokenRequest {
     pub refresh_token: String,
+    pub app_id: Uuid,
 }
 
 impl From<RefreshToken> for RefreshTokenDB {
@@ -59,6 +75,7 @@ impl From<RefreshToken> for RefreshTokenDB {
         let id = value.hash();
         RefreshTokenDB {
             id,
+            app_id: value.app_id,
             user_id: value.user_id,
             family: value.family,
             scopes: value.scopes,
@@ -152,14 +169,20 @@ impl RefreshToken {
         String::from_utf8_lossy(&result[..]).to_string()
     }
 
-    pub async fn default(user_id: Uuid, scopes: Vec<Scope>) -> Result<Self> {
-        RefreshToken::new(user_id, Uuid::new_v4(), scopes).await
+    pub async fn default(user_id: Uuid, scopes: Vec<Scope>, app_id: Uuid) -> Result<Self> {
+        RefreshToken::new(user_id, Uuid::new_v4(), scopes, app_id).await
     }
 
-    pub async fn new(user_id: Uuid, family: Uuid, scopes: Vec<Scope>) -> Result<Self> {
+    pub async fn new(
+        user_id: Uuid,
+        family: Uuid,
+        scopes: Vec<Scope>,
+        app_id: Uuid,
+    ) -> Result<Self> {
         let r = RefreshToken {
             id: Uuid::new_v4(),
             user_id,
+            app_id,
             family,
             valid: true,
             scopes,
@@ -232,6 +255,29 @@ impl fmt::Display for Scope {
 impl Scope {
     pub fn check_scopes(scopes: &Scopes, target: &Scope) -> bool {
         scopes.contains(target)
+    }
+
+    pub async fn check_user_app_relationship(user_id: Uuid, app_id: Uuid) -> Result<Vec<Self>> {
+        if app_id == MASTER_APP_ID.to_owned() {
+            return Ok(Scope::all());
+        }
+        match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
+            "user_id",
+            &user_id.to_string(),
+        )
+        .await
+        {
+            Ok(recs) => {
+                for r in recs {
+                    println!("Checking {}", r.app_id);
+                    if r.app_id == app_id {
+                        return Ok(r.scopes);
+                    }
+                }
+                Err(Error::msg(format!("Could not find record for {}", app_id)))
+            }
+            Err(_) => Err(Error::msg(format!("Could not find record for {}", user_id))),
+        }
     }
 
     pub fn all() -> Vec<Scope> {
@@ -397,6 +443,7 @@ pub struct LoginUser {
     pub email: Option<String>,
     pub password: Option<String>,
     pub discord_sf: Option<String>,
+    pub app_id: Uuid,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -497,4 +544,14 @@ pub struct UpdateApplication {
     pub name: Option<String>,
     pub callback_uris: Option<Vec<String>>,
     pub status: Option<AppStatus>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct AuthReview {
+    pub app_id: Uuid,
+    pub app_name: String,
+    pub user_id: Uuid,
+    pub scopes: Scopes,
+    pub redirect_uri: String,
+    pub state: String,
 }

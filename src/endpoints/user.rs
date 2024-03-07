@@ -1,15 +1,19 @@
+use anyhow::anyhow;
 use axum::{
     middleware,
     routing::{delete, get, patch, post},
     Extension, Json, Router,
 };
+use uuid::Uuid;
 
 use crate::{
     db_handler,
     model::{
-        CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User, UserResponse, UserStatus,
+        ApprovedApplication, CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User,
+        UserResponse, UserStatus,
     },
     utils::{hash_password, ApiResponse},
+    MASTER_APP_ID,
 };
 
 use super::login::auth_middleware;
@@ -26,6 +30,7 @@ pub fn get_router() -> Router {
         .route("/", get(get_user))
         .route("/", patch(update_user))
         .route("/", delete(delete_user))
+        .route("/apps", get(get_approved_applications))
         .layer(middleware::from_fn(auth_middleware))
         .route("/", post(create_user_from_email))
 }
@@ -78,19 +83,47 @@ async fn delete_user(
     }
 }
 
+async fn get_approved_applications(
+    Extension(current_user): Extension<User>,
+) -> Result<Json<Vec<ApprovedApplication>>, ApiResponse> {
+    match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
+        "user_id",
+        &current_user.id.to_string(),
+    )
+    .await
+    {
+        Ok(apps) => Ok(Json(apps)),
+        Err(_) => Err(ApiResponse::NotFound),
+    }
+}
+
 async fn create_user_from_email(
     user: Json<CreateUserEmail>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
     // check the item doesnt already exist
     match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &user.email).await {
         Ok(Some(_)) => Err(ApiResponse::ResourceExists),
-        Ok(None) => match User::new_from_email(&user.email, &user.password).await {
-            Ok(new) => match db_handler::put_item::<User>(new).await {
-                Ok(u) => Ok(Json(u.into())),
+        Ok(None) => {
+            match User::new_from_email(&user.email, &user.password).await {
+                Ok(new) => match db_handler::put_item::<User>(new).await {
+                    Ok(u) => {
+                        let aa = ApprovedApplication {
+                            id: Uuid::new_v4(),
+                            user_id: u.id,
+                            app_id: MASTER_APP_ID.to_owned(),
+                            app_name: "CORVUS".into(),
+                            scopes: Scope::all(),
+                        };
+                        match db_handler::put_item::<ApprovedApplication>(aa).await {
+                            Ok(_) => Ok(Json(u.into())),
+                            Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not generate access, please contact support with user_id: {}", u.id)))
+                        }
+                    }
+                    Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                },
                 Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
-            },
-            Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
-        },
+            }
+        }
         Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
     }
 }

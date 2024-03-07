@@ -35,13 +35,21 @@ POST "/login/email" : {
 
 ##  Users
 ```
-🔒 GET "/user/" : {} => {
+🔒 GET "/user" : {} => {
 	discord_sf: Option<String>,
 	email: Option<String>,
 	id: Uuid,
 	rsi_id: Option<String>,
 	sentinel: String,
 	status: [WaitingValidation,  Active, Inactive, Unknown]
+}
+
+🔒 GET "/user/apps" : {} => {
+	[
+		"app_id",
+		"app_name",
+		"scopes"
+	]
 }
 
 🔒 PATCH "/user/update": {

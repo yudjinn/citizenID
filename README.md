@@ -19,5 +19,4 @@ Test User:
 test@email.co
 password3
 
-## TODO:
-- [ ] Refactor codebase -- use something like [this](https://www.youtube.com/watch?v=zUxF0kvydJs)
+[Product mgmt](https://app.plane.so/vestra/projects/7838ebfd-b388-47dd-b162-72c7aa53d41c/issues)

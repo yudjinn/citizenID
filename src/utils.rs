@@ -43,13 +43,14 @@ pub async fn check_hash(hash_string: &str, salt: &str, comp_string: &str) -> Res
 
 pub async fn generate_token_pair(
     user_id: Uuid,
+    app_id: Uuid,
     family: Option<Uuid>,
     scopes: Vec<Scope>,
 ) -> Result<(RefreshToken, AuthToken)> {
     let r = if family.is_some() {
-        RefreshToken::new(user_id, family.unwrap(), scopes).await?
+        RefreshToken::new(user_id, family.unwrap(), scopes, app_id).await?
     } else {
-        RefreshToken::default(user_id, scopes).await?
+        RefreshToken::default(user_id, scopes, app_id).await?
     };
     let a = AuthToken::default(&r).await;
     Ok((r, a))

@@ -9,7 +9,9 @@ use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{LoginUser, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User};
+use crate::model::{
+    Application, LoginUser, RefreshToken, RefreshTokenDB, RefreshTokenRequest, Scope, User,
+};
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::KEYS;
 use crate::{db_handler, utils::check_hash};
@@ -44,42 +46,61 @@ async fn login_with_email(
             password: Some(password),
             ..
         } => {
-            match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
-                .await
+            if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<Application>(
+                &login.app_id.to_string(),
+            )
+            .await
+            .unwrap()
             {
-                Ok(Some(user)) => {
-                    if user.hashed_password.is_none() || user.salt.is_none() {
-                        return Err(ApiResponse::Unauthorized);
-                    }
-                    if let Ok(v) = check_hash(
-                        &password,
-                        &user.salt.clone().unwrap(),
-                        &user.hashed_password.clone().unwrap(),
-                    )
+                match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
                     .await
-                    {
-                        if v {
-                            let (r, a) = generate_token_pair(user.id, None, Scope::all())
-                                .await
-                                .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-                            let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                                .map_err(|_| ApiResponse::InternalServerError)?;
-                            let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                                .map_err(|_| ApiResponse::InternalServerError)?;
-
-                            Ok(Json(AuthResponse {
-                                auth_token: signed_auth_token,
-                                refresh_token: signed_ref_token,
-                            }))
-                        } else {
-                            Err(ApiResponse::Unauthorized)
+                {
+                    Ok(Some(user)) => {
+                        if user.hashed_password.is_none() || user.salt.is_none() {
+                            return Err(ApiResponse::Unauthorized);
                         }
-                    } else {
-                        Err(ApiResponse::InternalServerError)
+                        match Scope::check_user_app_relationship(user.id, app.id).await {
+                            Ok(scopes) => {
+                                if let Ok(v) = check_hash(
+                                    &password,
+                                    &user.salt.clone().unwrap(),
+                                    &user.hashed_password.clone().unwrap(),
+                                )
+                                .await
+                                {
+                                    if v {
+                                        let (r, a) =
+                                            generate_token_pair(user.id, app.id, None, scopes)
+                                                .await
+                                                .map_err(
+                                                    ApiResponse::InternalServerErrorWithMessage,
+                                                )?;
+                                        let signed_ref_token =
+                                            encode(&Header::default(), &r, &KEYS.encoding)
+                                                .map_err(|_| ApiResponse::InternalServerError)?;
+                                        let signed_auth_token =
+                                            encode(&Header::default(), &a, &KEYS.encoding)
+                                                .map_err(|_| ApiResponse::InternalServerError)?;
+
+                                        Ok(Json(AuthResponse {
+                                            auth_token: signed_auth_token,
+                                            refresh_token: signed_ref_token,
+                                        }))
+                                    } else {
+                                        Err(ApiResponse::Unauthorized)
+                                    }
+                                } else {
+                                    Err(ApiResponse::InternalServerError)
+                                }
+                            }
+                            _ => Err(ApiResponse::Unauthorized),
+                        }
                     }
+                    Ok(None) => Err(ApiResponse::Unauthorized),
+                    Err(_) => Err(ApiResponse::InternalServerError),
                 }
-                Ok(None) => Err(ApiResponse::Unauthorized),
-                Err(_) => Err(ApiResponse::InternalServerError),
+            } else {
+                Err(ApiResponse::MissingData)
             }
         }
         _ => Err(ApiResponse::MissingData),
@@ -119,10 +140,11 @@ async fn get_new_token(
     match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash()).await {
         Ok(Some(t)) => {
             let mut token = token;
-            if t.valid {
-                let (r, a) = generate_token_pair(token.user_id, Some(token.family), Scope::all())
-                    .await
-                    .map_err(|_| ApiResponse::InternalServerError)?;
+            if t.valid && token.app_id == t.app_id {
+                let (r, a) =
+                    generate_token_pair(token.user_id, t.app_id, Some(token.family), t.scopes)
+                        .await
+                        .map_err(|_| ApiResponse::InternalServerError)?;
                 token
                     .invalidate()
                     .await

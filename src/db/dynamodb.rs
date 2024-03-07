@@ -14,7 +14,7 @@ use serde_dynamo::aws_sdk_dynamodb_0_33::{from_items, to_item};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-use crate::model::{Model, RefreshTokenDB};
+use crate::model::Model;
 
 pub static LOCAL_DB: OnceCell<Client> = OnceCell::const_new();
 
@@ -178,9 +178,6 @@ where
     let i = to_item(item.clone())?;
 
     let request = client.put_item().table_name(T::TABLE).set_item(Some(i));
-    if std::any::type_name::<T>() == std::any::type_name::<RefreshTokenDB>() {
-        // set TTL
-    }
     let _resp = request.send().await?;
 
     Ok(item)

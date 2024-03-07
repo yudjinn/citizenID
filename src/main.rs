@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::CorsLayer;
 pub mod endpoints;
 pub mod error;
 pub mod model;
@@ -31,6 +31,13 @@ lazy_static! {
         .split(' ')
         .map(|s| s.to_owned())
         .collect();
+    static ref MASTER_APP_ID: uuid::Uuid = uuid::Uuid::parse_str(
+        &std::env::var_os("MASTER_APP_ID")
+            .unwrap_or("adaf40f8-0f79-4dd0-a995-912604ccde95".into())
+            .into_string()
+            .unwrap()
+    )
+    .unwrap();
 }
 
 #[cfg(not(feature = "lambda"))]
@@ -72,7 +79,7 @@ async fn main() -> Result<(), RuntimeError> {
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ])
         .allow_credentials(true)
-        .allow_origin(AllowOrigin::any());
+        .allow_origin(cors_origins);
 
     let app = Router::new()
         .route("/health", get(health))
