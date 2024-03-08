@@ -21,7 +21,7 @@ pub static LOCAL_DB: OnceCell<Client> = OnceCell::const_new();
 pub async fn get_or_init() -> &'static Client {
     LOCAL_DB
         .get_or_init(|| async {
-            let config = aws_config::from_env().profile_name("dev").load().await;
+            let config = aws_config::from_env().profile_name("local").load().await;
             Client::new(&config)
         })
         .await

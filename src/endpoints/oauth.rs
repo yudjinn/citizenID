@@ -1,8 +1,9 @@
+use anyhow::anyhow;
 use axum::{
     extract::{Path, Query},
     middleware::{self},
     response::Response,
-    routing::get,
+    routing::{get, post},
     Extension, Json, Router,
 };
 use axum_extra::extract::CookieJar;
@@ -12,8 +13,8 @@ use uuid::Uuid;
 
 use crate::{
     db_handler,
-    model::{Application, ApprovedApplication, AuthReview, OAuthUser, Scope, User},
-    utils::ApiResponse,
+    model::{Application, ApprovedApplication, AuthReview, OAuthUser, RefreshToken, Scope, User},
+    utils::{generate_token_pair, ApiResponse},
 };
 
 use super::login::auth_middleware;
@@ -21,7 +22,7 @@ use super::login::auth_middleware;
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(init_authorization))
-        .route("/authorize", get(approve_authorization))
+        .route("/authorize", post(approve_authorization))
         .layer(middleware::from_fn(auth_middleware))
         .route("/test", get(test_token))
 }
@@ -75,8 +76,10 @@ pub async fn init_authorization(
             .unwrap()
     {
         if redirect_uri.is_some() {
-            let ri = if app.callback_uris.contains(redirect_uri.as_ref().unwrap()) {
-                redirect_uri.unwrap().to_string()
+            //TODO: decode this if needed
+            let parsed = redirect_uri.unwrap().to_string();
+            let ri = if app.callback_uris.contains(&parsed) {
+                parsed
             } else {
                 app.callback_uris.first().unwrap().clone()
             };
@@ -103,7 +106,7 @@ pub async fn init_authorization(
 pub async fn approve_authorization(
     Extension(current_user): Extension<User>,
     Json(auth): Json<AuthReview>,
-) -> Result<Response, ApiResponse> {
+) -> Result<Json<RefreshToken>, ApiResponse> {
     //
     let aa = ApprovedApplication {
         id: Uuid::new_v4(),
@@ -113,7 +116,14 @@ pub async fn approve_authorization(
         app_name: auth.app_name,
     };
     match db_handler::put_item::<ApprovedApplication>(aa).await {
-        Ok(_) => todo!(),
-        Err(_) => todo!(),
+        Ok(auth) => {
+            let (r, _) = generate_token_pair(current_user.id, auth.app_id, None, auth.scopes)
+                .await
+                .unwrap();
+            Ok(Json(r))
+        }
+        Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
+            "Could not associate user with application."
+        ))),
     }
 }

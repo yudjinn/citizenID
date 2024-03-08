@@ -19,6 +19,7 @@ POST "/login/email" : {
 } => {
 	auth_token: String,
 	refresh_token: String,
+	app_id: Uuid
 }
 
 🔒 POST  "/login/token" : {
@@ -26,6 +27,7 @@ POST "/login/email" : {
 } => {
 	auth_token: String,
 	refresh_token: String,
+	app_id: Uuid
 }
 
 🔒 POST  "/logout" : {
@@ -117,27 +119,29 @@ POST "/user" : {
 
 ## OAuth
 ```
-🔒 GET "/oauth" : {
-	corvus_key: application's id,
-	corvus_secret: application's secret,
-	corvus_request: specific uri to redirect to, if it's in the list of callbacks
-		->  otherwise, use first callback,
-	TODO: scopes to enable
+🔒 GET "/oauth?app_id&state&scopes&redirect_url" : {
+	app_id: Uuid,
+	state: code that is returned,
+	scopes: '+' delimited list of scopes,
+	redirect_uri: must exist in app's allowed uris
 } => 
-THIS SHOULD FIRST PROMPT THE USER FOR CONSENT(not yet implemented) =>
-REDIRECT to redirect uri chosen (or first in list for application)
 {
-	corvus-auth: payload containing corvus user-id and rsi_id tied to account
-		-> encoded using application's secret
+	// This is to review and show the user as acceptance
+	app_id: Uuid,
+	app_name: String,
+	user_id: Uuid,
+	redirect_uri: String,
+	scopes: Vec<String>,
+	state: String
+
+🔒 POST "/oauth/authorize" : {
+	app_id: Uuid,
+	app_name: String,
+	user_id: Uuid,
+	redirect_uri: String,
+	scopes: Vec<String>,
+	state: String
+} => 
+{
+	refresh_token: Uuid
 }
-
-TODO: NOT IMPLEMENTED YET:
-🔒 POST "/oauth" : {
-	corvus_key: application's id,
-	corvus_auth: encoded key from earlier,
-	} => {
-		corvus_token: auth token for access to user details, based on scope
-	}
-### This token expires after a set TTL, and the end application will have to re-prompt for access
-```
-
