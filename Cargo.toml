@@ -3,6 +3,9 @@ name = "citizen_id"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+strip = true
+
 [features]
 # compile-time differences for lambda usage
 tempdb = []

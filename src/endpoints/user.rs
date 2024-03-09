@@ -39,7 +39,7 @@ async fn get_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::GetUserFull) {
         // Regular login -> tokin with full scope
         // Oauth -> just id/rsi_id/status?
         match db_handler::get_item_from_table_with_filter_by_id::<User>(
@@ -68,7 +68,7 @@ async fn delete_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
 ) -> Result<(), ApiResponse> {
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
         let mut user = current_user.clone();
         user.status = UserStatus::Inactive;
         match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
@@ -134,7 +134,7 @@ async fn update_user(
     update: Json<UpdateUser>,
 ) -> Result<Json<UserResponse>, ApiResponse> {
     // check the item doesnt already exist
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::UserFull) {
+    if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
         match db_handler::get_item_from_table_with_filter_by_id::<User>(
             &current_user.id.to_string(),
         )

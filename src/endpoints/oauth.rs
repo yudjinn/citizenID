@@ -1,19 +1,19 @@
 use anyhow::anyhow;
+
 use axum::{
-    extract::{Path, Query},
+    extract::Query,
     middleware::{self},
-    response::Response,
+    response::Redirect,
     routing::{get, post},
     Extension, Json, Router,
 };
-use axum_extra::extract::CookieJar;
 
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
     db_handler,
-    model::{Application, ApprovedApplication, AuthReview, OAuthUser, RefreshToken, Scope, User},
+    model::{Application, ApprovedApplication, AuthReview, Scope, User},
     utils::{generate_token_pair, ApiResponse},
 };
 
@@ -24,33 +24,40 @@ pub fn get_router() -> Router {
         .route("/", get(init_authorization))
         .route("/authorize", post(approve_authorization))
         .layer(middleware::from_fn(auth_middleware))
-        .route("/test", get(test_token))
+        .route("/test", get(test_oauth))
 }
 
-// Flow should be:
-// get code -> prompt user for response -> hit reroute with code -> redirect to uri with values in body
-// async fn get_code
-
-async fn test_token(
-    Path(application_id): Path<Uuid>,
-    jar: CookieJar,
-) -> Result<String, ApiResponse> {
-    let auth = jar.get("corvus_auth").unwrap().value().to_owned();
-    let application = db_handler::get_item_from_table_with_filter_by_id::<Application>(
-        &application_id.to_string(),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    match decode::<OAuthUser>(
-        &auth,
-        &DecodingKey::from_secret(application.secret.as_bytes()),
-        &Validation::default(),
-    ) {
-        Ok(d) => Ok(format!("{:?}", d.claims)),
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(
-            anyhow::Error::msg(e.to_string()),
-        )),
+async fn test_oauth(
+    Extension(current_user): Extension<User>,
+    Json(auth): Json<AuthReview>,
+) -> Result<Json<Uuid>, ApiResponse> {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{}{}", auth.user_id, auth.app_id));
+    let result = hasher.finalize();
+    let id = Uuid::parse_str(String::from_utf8_lossy(&result[..]).as_ref()).unwrap();
+    let aa = ApprovedApplication {
+        id,
+        user_id: current_user.id,
+        scopes: auth.scopes,
+        app_id: auth.app_id,
+        app_name: auth.app_name,
+    };
+    match db_handler::put_item::<ApprovedApplication>(aa).await {
+        Ok(approved_app) => {
+            let (r, _) = generate_token_pair(
+                current_user.id,
+                approved_app.app_id,
+                None,
+                approved_app.scopes,
+            )
+            .await
+            .unwrap();
+            // redirect to endpoint
+            Ok(Json(r.id))
+        }
+        Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
+            "Could not associate user with application."
+        ))),
     }
 }
 
@@ -106,21 +113,33 @@ pub async fn init_authorization(
 pub async fn approve_authorization(
     Extension(current_user): Extension<User>,
     Json(auth): Json<AuthReview>,
-) -> Result<Json<RefreshToken>, ApiResponse> {
-    //
+) -> Result<Redirect, ApiResponse> {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{}{}", auth.user_id, auth.app_id));
+    let result = hasher.finalize();
+    let id = Uuid::parse_str(String::from_utf8_lossy(&result[..]).as_ref()).unwrap();
     let aa = ApprovedApplication {
-        id: Uuid::new_v4(),
+        id,
         user_id: current_user.id,
         scopes: auth.scopes,
         app_id: auth.app_id,
         app_name: auth.app_name,
     };
     match db_handler::put_item::<ApprovedApplication>(aa).await {
-        Ok(auth) => {
-            let (r, _) = generate_token_pair(current_user.id, auth.app_id, None, auth.scopes)
-                .await
-                .unwrap();
-            Ok(Json(r))
+        Ok(approved_app) => {
+            let (r, _) = generate_token_pair(
+                current_user.id,
+                approved_app.app_id,
+                None,
+                approved_app.scopes,
+            )
+            .await
+            .unwrap();
+            // redirect to endpoint
+            Ok(Redirect::temporary(&format!(
+                "{}?token={}",
+                auth.redirect_uri, r.id
+            )))
         }
         Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
             "Could not associate user with application."

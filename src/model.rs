@@ -223,18 +223,24 @@ pub type Scopes = Vec<Scope>;
 pub enum Scope {
     Invalid,
     GetUserID,
+    SetUser,
+    GetUserFull,
     GetRSIID,
+    SetRSIID,
     GetDiscordID,
-    UserFull,
+    SetDiscordID,
 }
 
 impl From<String> for Scope {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
-            "user" => Self::GetUserID,
-            "discord" => Self::GetDiscordID,
-            "rsi" => Self::GetRSIID,
-            "full" => Self::UserFull,
+            "get_user" => Self::GetUserID,
+            "get_user_full" => Self::GetUserID,
+            "update_user" => Self::SetUser,
+            "get_discord" => Self::GetDiscordID,
+            "set_discord" => Self::SetDiscordID,
+            "get_rsi" => Self::GetRSIID,
+            "set_rsi" => Self::SetRSIID,
             _ => Self::Invalid,
         }
     }
@@ -244,10 +250,13 @@ impl fmt::Display for Scope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Scope::Invalid => write!(f, "invalid"),
-            Scope::GetUserID => write!(f, "getUserID"),
-            Scope::GetRSIID => write!(f, "getRsiID"),
-            Scope::GetDiscordID => write!(f, "getDiscordID"),
-            Scope::UserFull => write!(f, "getUserFull"),
+            Scope::GetUserID => write!(f, "get_user"),
+            Scope::SetUser => write!(f, "set_user"),
+            Scope::GetUserFull => write!(f, "get_user_full"),
+            Scope::GetRSIID => write!(f, "get_rsi_id"),
+            Scope::SetRSIID => write!(f, "set_rsi_id"),
+            Scope::GetDiscordID => write!(f, "get_discord_id"),
+            Scope::SetDiscordID => write!(f, "set_discord_id"),
         }
     }
 }
@@ -554,4 +563,14 @@ pub struct AuthReview {
     pub scopes: Scopes,
     pub redirect_uri: String,
     pub state: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct DiscordTokenLogin {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u32,
+    pub refresh_token: String,
+    pub scope: String,
+    pub app_id: Uuid,
 }
