@@ -385,11 +385,7 @@ impl User {
     pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
         let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();
-        let sentinel = format!(
-            "[id::{}{}]",
-            &id.as_fields().2.to_string(),
-            &id.as_fields().1.to_string()
-        );
+        let sentinel = Self::generate_sentinel(id).await;
         Ok(Self {
             id,
             email: Some(email.into()),
@@ -402,16 +398,26 @@ impl User {
         })
     }
 
+    pub async fn generate_sentinel(id: Uuid) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(String::from_utf8_lossy(id.as_fields().3).into_owned());
+        hasher.update(id.as_fields().1.to_string());
+        hasher.update(id.as_fields().2.to_string());
+        let result = hasher.finalize();
+        let s = String::from_utf8_lossy(&result[..]).to_string();
+        format!("[corvus::{}]", s)
+    }
+
     pub async fn new_from_discord(snowflake: &str) -> Self {
         let id = Uuid::new_v4();
-        let sentinel = String::from_utf8_lossy(id.as_fields().3);
+        let sentinel = Self::generate_sentinel(id).await;
         Self {
             id,
             email: None,
             hashed_password: None,
             salt: None,
             rsi_id: None,
-            sentinel: sentinel.to_string(),
+            sentinel,
             status: UserStatus::WaitingValidation,
             discord_sf: Some(snowflake.into()),
         }

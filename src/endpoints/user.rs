@@ -18,13 +18,6 @@ use crate::{
 
 use super::login::auth_middleware;
 
-/// Discord authorization
-///
-/// - client_id: `1170109958549934211`
-/// - client_secret: `Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae`
-//  - authorization_url = "https://discord.com/oauth2/authorize"
-//  - token_url = "http://localhost:3000/discord"
-
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_user))

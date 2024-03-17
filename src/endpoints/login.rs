@@ -8,6 +8,7 @@ use axum::routing::{delete, post};
 use axum::{extract, Json};
 use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
+use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -136,18 +137,51 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
     Ok(())
 }
 
+/// Discord authorization
+const DISCORD_CLIENT_ID: &str = "1170109958549934211";
+const DISCORD_CLIENT_SECRET: &str = "Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae";
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct DiscordUserResponse {
+    id: String,
+    username: String,
+    discriminator: String,
+    avatar: String,
+    verified: bool,
+    email: String,
+    flags: u32,
+    banner: String,
+    accent_color: u32,
+    premium_type: u32,
+    public_flags: u32,
+}
+
 async fn login_with_discord(
     Json(token): Json<DiscordTokenLogin>,
 ) -> Result<Json<AuthResponse>, ApiResponse> {
     // make subcall to `/users/@me`
-    let snowflake = "hello";
+    let client = reqwest::Client::new();
+    let discord_response = client
+        .get("https://discord.com/api/users/@me")
+        .bearer_auth(token.access_token)
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .timeout(tokio::time::Duration::from_secs(5))
+        .send()
+        .await
+        .unwrap()
+        .json::<DiscordUserResponse>()
+        .await
+        .unwrap();
+
+    let snowflake = discord_response.id;
 
     if let Some(app) =
         db_handler::get_item_from_table_with_filter_by_id::<Application>(&token.app_id.to_string())
             .await
             .unwrap()
     {
-        if let Ok(Some(mut user)) =
+        if let Ok(Some(user)) =
             db_handler::get_item_from_table_with_filter_by_index::<User>("discord_sf", &snowflake)
                 .await
         {
@@ -167,11 +201,11 @@ async fn login_with_discord(
                         refresh_token: signed_ref_token,
                     }))
                 }
-                Err(_) => Err(ApiResponse::InternalServerError),
+                Err(_) => Err(ApiResponse::Unauthorized),
             }
         } else {
             // user doesnt exist, create
-            let u = User::new_from_discord(snowflake).await;
+            let u = User::new_from_discord(&snowflake).await;
             if let Ok(user) = db_handler::put_item::<User>(u).await {
                 let aa = ApprovedApplication {
                     id: Uuid::new_v4(),

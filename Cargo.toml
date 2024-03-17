@@ -1,6 +1,6 @@
 [package]
 name = "citizen_id"
-version = "0.1.0"
+version = "0.2.3"
 edition = "2021"
 
 [profile.release]
@@ -31,6 +31,8 @@ jsonwebtoken = "9.2.0"
 lambda_http = "0.10.0"
 lambda_runtime = "0.10.0"
 lazy_static = "1.4.0"
+reqwest = { version = "0.11.26", features = ["json"] }
+reqwest-graphql = "1.0.0"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_dynamo = { version = "4.2.13", features = ["aws-sdk-dynamodb+0_33"] }
 serde_with = { version = "3.6.1", features = ["json"] }
