@@ -367,6 +367,21 @@ pub struct OAuthUser {
     pub rsi_id: String,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct RSILinkUser {
+    pub id: Uuid,
+    pub sentinel: String,
+}
+
+impl From<User> for RSILinkUser {
+    fn from(value: User) -> Self {
+        Self {
+            id: value.id,
+            sentinel: value.sentinel,
+        }
+    }
+}
+
 impl From<User> for UserResponse {
     fn from(value: User) -> Self {
         Self {

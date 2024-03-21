@@ -1,16 +1,19 @@
 use anyhow::anyhow;
 use axum::{
+    extract::Query,
     middleware,
     routing::{delete, get, patch, post},
     Extension, Json, Router,
 };
+use serde::{Deserialize, Serialize};
+use serde_with::SerializeDisplay;
 use uuid::Uuid;
 
 use crate::{
     db_handler,
     model::{
-        ApprovedApplication, CreateUserEmail, RefreshToken, Scope, Scopes, UpdateUser, User,
-        UserResponse, UserStatus,
+        ApprovedApplication, CreateUserEmail, RSILinkUser, RefreshToken, Scope, Scopes, UpdateUser,
+        User, UserResponse, UserStatus,
     },
     utils::{hash_password, ApiResponse},
     MASTER_APP_ID,
@@ -24,6 +27,8 @@ pub fn get_router() -> Router {
         .route("/", patch(update_user))
         .route("/", delete(delete_user))
         .route("/apps", get(get_approved_applications))
+        .route("/link", get(begin_rsi_link))
+        .route("/link", post(link_rsi_account))
         .layer(middleware::from_fn(auth_middleware))
         .route("/", post(create_user_from_email))
 }
@@ -164,5 +169,102 @@ async fn update_user(
         }
     } else {
         Err(ApiResponse::Unauthorized)
+    }
+}
+
+async fn begin_rsi_link(
+    Extension(current_user): Extension<User>,
+    Extension(scopes): Extension<Scopes>,
+) -> Result<Json<RSILinkUser>, ApiResponse> {
+    if Scope::check_scopes(&scopes, &Scope::SetRSIID) {
+        let ret: RSILinkUser = current_user.into();
+        Ok(Json(ret))
+    } else {
+        Err(ApiResponse::Unauthorized)
+    }
+}
+
+#[allow(dead_code, non_snake_case)]
+#[derive(Serialize)]
+struct Vars {
+    CreatorQuery: CreatorQuery,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize)]
+struct CreatorQuery {
+    nickname: String,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct Data {
+    creator: Creator,
+}
+
+#[allow(dead_code, non_snake_case)]
+#[derive(Deserialize)]
+struct Creator {
+    bio: Option<String>,
+    citizenDossierUrl: String,
+    displayName: String,
+    live: Option<String>,
+    nickname: String,
+    stats: Stats,
+    thumbnailUrl: String,
+    website: String,
+    __typename: String,
+}
+
+#[allow(dead_code, non_snake_case)]
+#[derive(Deserialize)]
+struct Stats {
+    followed: bool,
+    followedCount: u32,
+    followingCount: u32,
+    upvotesCount: u32,
+    viewsCount: u32,
+    __typename: String,
+}
+async fn link_rsi_account(
+    Query(rsi_account_name): Query<String>,
+    Extension(current_user): Extension<User>,
+    Extension(scopes): Extension<Scopes>,
+) -> Result<ApiResponse, ApiResponse> {
+    if !Scope::check_scopes(&scopes, &Scope::SetRSIID) {
+        return Err(ApiResponse::Unauthorized);
+    }
+
+    if rsi_account_name.is_empty() {
+        return Err(ApiResponse::MissingData);
+    }
+
+    let endpoint = "https://robertsspaceindustries.com/community-hub/api/v1/graphql";
+    let query = r#"query getAccount($CreatorQuery: CreatorQuery!) {\n  creator(query: $CreatorQuery) {\n    ...Account\n    __typename\n  }\n}\n\nfragment Account on Account {\n  bio\n  citizenDossierUrl\n  displayName\n  live\n  nickname\n  stats {\n    ...AccountStats\n    __typename\n  }\n  thumbnailUrl\n  website\n  __typename\n}\n\nfragment AccountStats on AccountStats {\n  followed\n  followedCount\n  followingCount\n  upvotesCount\n  viewsCount\n  __typename\n}"#;
+    let client = reqwest_graphql::Client::new(endpoint);
+    let vars = Vars {
+        CreatorQuery: CreatorQuery {
+            nickname: rsi_account_name,
+        },
+    };
+    match client.query_with_vars::<Data, Vars>(query, vars).await {
+        Ok(data) => {
+            // check the thing matches
+            if data
+                .creator
+                .bio
+                .is_some_and(|b| b.contains(&current_user.sentinel))
+            {
+                let mut update = current_user.clone();
+                update.rsi_id = Some(data.creator.displayName);
+                db_handler::put_item::<User>(update)
+                    .await
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                Ok(ApiResponse::Success)
+            } else {
+                Err(ApiResponse::MissingData)
+            }
+        }
+        Err(_) => Err(ApiResponse::InternalServerError),
     }
 }

@@ -138,9 +138,6 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
     Ok(())
 }
 
-/// Discord authorization
-const DISCORD_CLIENT_ID: &str = "1170109958549934211";
-const DISCORD_CLIENT_SECRET: &str = "Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae";
 
 async fn login_with_discord(
     Json(token): Json<DiscordTokenLogin>,
