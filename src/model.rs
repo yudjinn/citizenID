@@ -580,3 +580,19 @@ pub struct DiscordTokenLogin {
     pub scope: String,
     pub app_id: Uuid,
 }
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+pub struct DiscordUserResponse {
+    pub id: String,
+    pub username: String,
+    pub discriminator: String,
+    pub avatar: String,
+    pub verified: bool,
+    pub email: String,
+    pub flags: u32,
+    pub banner: String,
+    pub accent_color: u32,
+    pub premium_type: u32,
+    pub public_flags: u32,
+}

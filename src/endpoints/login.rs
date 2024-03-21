@@ -12,6 +12,7 @@ use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::model::DiscordUserResponse;
 use crate::model::{
     Application, ApprovedApplication, DiscordTokenLogin, LoginUser, RefreshToken, RefreshTokenDB,
     RefreshTokenRequest, Scope, Scopes, User,
@@ -140,22 +141,6 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
 /// Discord authorization
 const DISCORD_CLIENT_ID: &str = "1170109958549934211";
 const DISCORD_CLIENT_SECRET: &str = "Z1VMHGGNqCj2Z9JuWxOxiww62ifOXAae";
-
-#[allow(dead_code)]
-#[derive(Deserialize)]
-struct DiscordUserResponse {
-    id: String,
-    username: String,
-    discriminator: String,
-    avatar: String,
-    verified: bool,
-    email: String,
-    flags: u32,
-    banner: String,
-    accent_color: u32,
-    premium_type: u32,
-    public_flags: u32,
-}
 
 async fn login_with_discord(
     Json(token): Json<DiscordTokenLogin>,
