@@ -26,7 +26,7 @@ pub async fn hash_string(val: &str, salt: SaltString) -> Result<(String, String)
     }
 }
 
-pub async fn check_hash(hash_string: &str, salt: &str, comp_string: &str) -> Result<bool> {
+pub fn check_hash(hash_string: &str, salt: &str, comp_string: &str) -> Result<bool> {
     let argon = Argon2::default();
     if let Ok(salt_str) = SaltString::from_b64(salt) {
         if let Ok(hashed) =

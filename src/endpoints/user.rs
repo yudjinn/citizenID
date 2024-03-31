@@ -6,7 +6,6 @@ use axum::{
     Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::SerializeDisplay;
 use uuid::Uuid;
 
 use crate::{

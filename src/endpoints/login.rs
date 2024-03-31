@@ -50,9 +50,10 @@ async fn login_with_email(
     match login {
         LoginUser {
             email: Some(email),
-            password: Some(password),
+            password: Some(entered_password),
             ..
         } => {
+            // TODO: pull this into a middleware
             if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<Application>(
                 &login.app_id.to_string(),
             )
@@ -63,18 +64,17 @@ async fn login_with_email(
                     .await
                 {
                     Ok(Some(user)) => {
+                        // if the user doesnt have a password set
                         if user.hashed_password.is_none() || user.salt.is_none() {
                             return Err(ApiResponse::Unauthorized);
                         }
                         match Scope::check_user_app_relationship(user.id, app.id).await {
                             Ok(scopes) => {
                                 if let Ok(v) = check_hash(
-                                    &password,
-                                    &user.salt.clone().unwrap(),
-                                    &user.hashed_password.clone().unwrap(),
-                                )
-                                .await
-                                {
+                                    &entered_password,
+                                    user.salt.as_ref().unwrap(),
+                                    user.hashed_password.as_ref().unwrap(),
+                                ) {
                                     if v {
                                         let (r, a) =
                                             generate_token_pair(user.id, app.id, None, scopes)
@@ -103,18 +103,18 @@ async fn login_with_email(
                             _ => Err(ApiResponse::Unauthorized),
                         }
                     }
-                    Ok(None) => Err(ApiResponse::Unauthorized),
+                    Ok(None) => Err(ApiResponse::NotFound),
                     Err(_) => Err(ApiResponse::InternalServerError),
                 }
             } else {
-                Err(ApiResponse::MissingData)
+                Err(ApiResponse::NotFound)
             }
         }
         _ => Err(ApiResponse::MissingData),
     }
 }
 
-async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
+async fn logout_user(req: Request<Body>) -> Result<ApiResponse, ApiResponse> {
     let refresh_header = req
         .headers()
         .get("refresh_token")
@@ -123,7 +123,7 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
     let refresh_header = if let Some(refresh_header) = refresh_header {
         refresh_header
     } else {
-        return Err(ApiResponse::NotFound);
+        return Err(ApiResponse::MissingData);
     };
 
     let mut refresh_token = RefreshToken::from_header_str(refresh_header)
@@ -135,9 +135,8 @@ async fn logout_user(req: Request<Body>) -> Result<(), ApiResponse> {
         .invalidate()
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-    Ok(())
+    Ok(ApiResponse::Success)
 }
-
 
 async fn login_with_discord(
     Json(token): Json<DiscordTokenLogin>,
