@@ -23,6 +23,7 @@ jobs:
       run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda
     - name: Rename output
       run: mv target/x86_64-unknown-linux-gnu/release/citizen_id bootstrap
+      run: chmod +x bootstrap
         
     - name: Archive production artifacts
       uses: actions/upload-artifact@v4
