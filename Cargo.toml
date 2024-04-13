@@ -11,7 +11,7 @@ strip = true
 tempdb = []
 dynamodb = []
 lambda = ["dynamodb"]
-default = ["tempdb"]
+default = ["dynamodb"]
 
 
 [dependencies]

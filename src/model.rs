@@ -419,8 +419,9 @@ impl User {
         hasher.update(id.as_fields().1.to_string());
         hasher.update(id.as_fields().2.to_string());
         let result = hasher.finalize();
-        let s = String::from_utf8_lossy(&result[..]).to_string();
-        format!("[corvus::{}]", s)
+        let mut s = format!("{:X}", &result);
+        s = s[..10].to_string();
+        format!("[corvus::{}]", &s)
     }
 
     pub async fn new_from_discord(snowflake: &str) -> Self {

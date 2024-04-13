@@ -184,52 +184,42 @@ async fn begin_rsi_link(
 }
 
 #[allow(dead_code, non_snake_case)]
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Vars {
     CreatorQuery: CreatorQuery,
 }
 
 #[allow(dead_code)]
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct CreatorQuery {
     nickname: String,
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Data {
     creator: Creator,
 }
 
 #[allow(dead_code, non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Creator {
     bio: Option<String>,
-    citizenDossierUrl: String,
     displayName: String,
-    live: Option<String>,
     nickname: String,
-    stats: Stats,
-    thumbnailUrl: String,
-    website: String,
-    __typename: String,
 }
 
-#[allow(dead_code, non_snake_case)]
 #[derive(Deserialize)]
-struct Stats {
-    followed: bool,
-    followedCount: u32,
-    followingCount: u32,
-    upvotesCount: u32,
-    viewsCount: u32,
-    __typename: String,
+struct RsiQs {
+    account_name: String,
 }
+
 async fn link_rsi_account(
-    Query(rsi_account_name): Query<String>,
+    Query(query): Query<RsiQs>,
     Extension(current_user): Extension<User>,
     Extension(scopes): Extension<Scopes>,
 ) -> Result<ApiResponse, ApiResponse> {
+    let rsi_account_name = query.account_name;
     if !Scope::check_scopes(&scopes, &Scope::SetRSIID) {
         return Err(ApiResponse::Unauthorized);
     }
@@ -238,8 +228,28 @@ async fn link_rsi_account(
         return Err(ApiResponse::MissingData);
     }
 
+    if db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
+        .await
+        .map_err(ApiResponse::InternalServerErrorWithMessage)?
+        .len()
+        > 0
+    {
+        return Err(ApiResponse::ResourceExists);
+    };
+
     let endpoint = "https://robertsspaceindustries.com/community-hub/api/v1/graphql";
-    let query = r#"query getAccount($CreatorQuery: CreatorQuery!) {\n  creator(query: $CreatorQuery) {\n    ...Account\n    __typename\n  }\n}\n\nfragment Account on Account {\n  bio\n  citizenDossierUrl\n  displayName\n  live\n  nickname\n  stats {\n    ...AccountStats\n    __typename\n  }\n  thumbnailUrl\n  website\n  __typename\n}\n\nfragment AccountStats on AccountStats {\n  followed\n  followedCount\n  followingCount\n  upvotesCount\n  viewsCount\n  __typename\n}"#;
+    let query = r#"query getAccount($CreatorQuery: CreatorQuery!)
+         {
+          creator(query: $CreatorQuery) {
+            ... Account
+              }
+         }
+        fragment Account on Account {
+          bio
+          displayName
+          nickname
+        }
+    "#;
     let client = reqwest_graphql::Client::new(endpoint);
     let vars = Vars {
         CreatorQuery: CreatorQuery {
@@ -264,6 +274,8 @@ async fn link_rsi_account(
                 Err(ApiResponse::MissingData)
             }
         }
-        Err(_) => Err(ApiResponse::InternalServerError),
+        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(
+            anyhow::Error::msg(e),
+        )),
     }
 }

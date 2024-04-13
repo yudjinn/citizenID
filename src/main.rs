@@ -1,7 +1,7 @@
 use axum::{
     http::{header::CONTENT_TYPE, HeaderName, HeaderValue, Method},
     routing::get,
-    Router,
+    Json, Router,
 };
 use endpoints::login::Keys;
 use lazy_static::lazy_static;
@@ -46,8 +46,8 @@ type RuntimeError = hyper::Error;
 #[cfg(feature = "lambda")]
 type RuntimeError = lambda_http::Error;
 
-async fn health() -> String {
-    "Healthy!".into()
+async fn health() -> Json<String> {
+    Json("Healthy!".into())
 }
 
 #[tokio::main]
