@@ -266,6 +266,7 @@ async fn link_rsi_account(
             {
                 let mut update = current_user.clone();
                 update.rsi_id = Some(data.creator.displayName);
+                update.status = UserStatus::Active;
                 db_handler::put_item::<User>(update)
                     .await
                     .map_err(ApiResponse::InternalServerErrorWithMessage)?;
