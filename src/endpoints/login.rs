@@ -108,7 +108,7 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                             _ => ApiResponse::Unauthorized,
                         }
                     }
-                    Ok(None) => ApiResponse::NotFound,
+                    Ok(None) => ApiResponse::Unauthorized,
                     Err(_) => ApiResponse::InternalServerError,
                 }
             } else {
