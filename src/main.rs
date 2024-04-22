@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 pub mod db;
 pub use db::db as db_handler;
 use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use utils::ApiResponse;
 pub mod endpoints;
 pub mod error;
@@ -61,7 +61,7 @@ async fn main() -> Result<(), RuntimeError> {
 
     tracing_subscriber::fmt::init();
 
-    let _cors_origins: Vec<HeaderValue> = CORS_ORIGINS
+    let cors_origins: Vec<HeaderValue> = CORS_ORIGINS
         .clone()
         .iter_mut()
         .map(|v| v.parse::<HeaderValue>().unwrap())
@@ -80,8 +80,7 @@ async fn main() -> Result<(), RuntimeError> {
             HeaderName::from_lowercase(b"auth_token").unwrap(),
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ])
-        .allow_credentials(true)
-        .allow_origin(Any);
+        .allow_origin(cors_origins);
 
     let app = Router::new()
         .route("/health", get(health))
