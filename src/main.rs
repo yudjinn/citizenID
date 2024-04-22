@@ -1,7 +1,7 @@
 use axum::{
     http::{header::CONTENT_TYPE, HeaderName, HeaderValue, Method},
     routing::get,
-    Json, Router,
+    Router,
 };
 use endpoints::login::Keys;
 use lazy_static::lazy_static;
@@ -26,7 +26,7 @@ lazy_static! {
         .unwrap();
     static ref KEYS: endpoints::login::Keys = Keys::new(SECRET.as_bytes());
     static ref CORS_ORIGINS: Vec<String> = std::env::var_os("CORS_ORIGINS")
-        .unwrap_or("http://localhost:5173".into())
+        .unwrap_or_default()
         .into_string()
         .unwrap()
         .split(' ')
@@ -60,11 +60,15 @@ async fn main() -> Result<(), RuntimeError> {
 
     tracing_subscriber::fmt::init();
 
-    let cors_origins: Vec<HeaderValue> = CORS_ORIGINS
+    let mut cors_origins: Vec<HeaderValue> = CORS_ORIGINS
         .clone()
         .iter_mut()
         .map(|v| v.parse::<HeaderValue>().unwrap())
         .collect();
+
+    if cors_origins.is_empty() {
+        cors_origins = vec!["*".parse::<HeaderValue>().unwrap()];
+    }
 
     let cors = CorsLayer::new()
         .allow_methods([
