@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 pub mod db;
 pub use db::db as db_handler;
 use tower_http::cors::CorsLayer;
+use utils::ApiResponse;
 pub mod endpoints;
 pub mod error;
 pub mod model;
@@ -46,8 +47,8 @@ type RuntimeError = hyper::Error;
 #[cfg(feature = "lambda")]
 type RuntimeError = lambda_http::Error;
 
-async fn health() -> Json<String> {
-    Json("Healthy!".into())
+async fn health() -> ApiResponse {
+    ApiResponse::Success("Healthy!".into())
 }
 
 #[tokio::main]
