@@ -10,6 +10,7 @@ use axum::{Extension, Router};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::model::DiscordUserResponse;
@@ -39,7 +40,7 @@ pub fn get_router() -> Router {
 
 async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiResponse {
     match RefreshToken::invalidate_all_for_user(current_user.id).await {
-        Ok(_) => ApiResponse::Success("Success".into()),
+        Ok(_) => ApiResponse::Success(json!("Success")),
         _ => ApiResponse::InternalServerError,
     }
 }
@@ -141,7 +142,7 @@ async fn logout_user(req: Request<Body>) -> ApiResponse {
         .await
         .map_err(ApiResponse::InternalServerErrorWithMessage)
         .unwrap();
-    ApiResponse::Success("Success".into())
+    ApiResponse::Success(json!("Success"))
 }
 
 async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse {
@@ -255,7 +256,7 @@ async fn revoke_discord(
                 .await
                 .map_err(ApiResponse::InternalServerErrorWithMessage)
                 .unwrap();
-            ApiResponse::Success("Success".into())
+            ApiResponse::Success(json!("Success"))
         } else {
             ApiResponse::MissingData
         }

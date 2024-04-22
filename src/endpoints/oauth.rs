@@ -8,6 +8,7 @@ use axum::{
     Extension, Json, Router,
 };
 
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -53,7 +54,7 @@ async fn test_oauth(
             .await
             .unwrap();
             // redirect to endpoint
-            ApiResponse::Success(r.id.to_string().into())
+            ApiResponse::Success(json!(r.id.to_string()))
         }
         Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!(
             "Could not associate user with application."

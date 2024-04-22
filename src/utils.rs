@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::model::{AuthToken, RefreshToken, Scope};
@@ -70,53 +70,48 @@ pub enum ApiResponse {
     Success(Value),
 }
 
-impl ToString for ApiResponse {
-    fn to_string(&self) -> String {
-        match self {
-            ApiResponse::Unauthorized => "403",
-            ApiResponse::NotFound => "404",
-            ApiResponse::MissingData => "400",
-            ApiResponse::InternalServerError => "500",
-            ApiResponse::InternalServerErrorWithMessage(_) => "500",
-            ApiResponse::NotImplemented => "501",
-            ApiResponse::ResourceExists => "409",
-            ApiResponse::Success(_) => "200",
+impl From<ApiResponse> for u16 {
+    fn from(val: ApiResponse) -> Self {
+        match val {
+            ApiResponse::Unauthorized => 403,
+            ApiResponse::NotFound => 404,
+            ApiResponse::MissingData => 400,
+            ApiResponse::InternalServerError => 500,
+            ApiResponse::InternalServerErrorWithMessage(_) => 500,
+            ApiResponse::NotImplemented => 501,
+            ApiResponse::ResourceExists => 409,
+            ApiResponse::Success(_) => 200,
         }
-        .into()
     }
 }
 
 #[derive(Serialize, Clone)]
 pub struct ApiResponseBody {
-    status: String,
+    status: u16,
     payload: Value,
 }
 
 impl IntoResponse for ApiResponse {
     fn into_response(self) -> axum::response::Response {
         let (status, payload) = match self {
-            ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized.".to_string()),
-            ApiResponse::MissingData => {
-                (StatusCode::PARTIAL_CONTENT, "Fields missing.".to_string())
-            }
+            ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, json!("Unauthorized.")),
+            ApiResponse::MissingData => (StatusCode::PARTIAL_CONTENT, json!("Fields missing.")),
             ApiResponse::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Something happened.".to_string(),
+                json!("Something happened."),
             ),
             ApiResponse::InternalServerErrorWithMessage(ref e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("An error occurred: {}", e),
+                json!(format!("An error occurred: {}", e)),
             ),
-            ApiResponse::NotImplemented => {
-                (StatusCode::NOT_IMPLEMENTED, "Not implemented.".to_string())
-            }
-            ApiResponse::NotFound => (StatusCode::NOT_FOUND, "Not found.".to_string()),
-            ApiResponse::ResourceExists => (StatusCode::CONFLICT, "Resource exists.".to_string()),
-            ApiResponse::Success(ref v) => (StatusCode::OK, v.to_string()),
+            ApiResponse::NotImplemented => (StatusCode::NOT_IMPLEMENTED, json!("Not implemented.")),
+            ApiResponse::NotFound => (StatusCode::NOT_FOUND, json!("Not found.")),
+            ApiResponse::ResourceExists => (StatusCode::CONFLICT, json!("Resource exists.")),
+            ApiResponse::Success(ref v) => (StatusCode::OK, v.clone()),
         };
         let body = ApiResponseBody {
-            status: self.to_string(),
-            payload: payload.into(),
+            status: self.into(),
+            payload,
         };
         Response::builder()
             .status(status)

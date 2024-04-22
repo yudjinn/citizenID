@@ -8,6 +8,7 @@ use lazy_static::lazy_static;
 
 pub mod db;
 pub use db::db as db_handler;
+use serde_json::json;
 use tower_http::cors::CorsLayer;
 use utils::ApiResponse;
 pub mod endpoints;
@@ -48,7 +49,7 @@ type RuntimeError = hyper::Error;
 type RuntimeError = lambda_http::Error;
 
 async fn health() -> ApiResponse {
-    ApiResponse::Success("Healthy!".into())
+    ApiResponse::Success(json!("Healthy!"))
 }
 
 #[tokio::main]

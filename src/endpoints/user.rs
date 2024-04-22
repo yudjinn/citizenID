@@ -6,6 +6,7 @@ use axum::{
     Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -70,7 +71,7 @@ async fn delete_user(
         user.status = UserStatus::Inactive;
         match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
             Ok(_) => match RefreshToken::invalidate_all_for_user(current_user.id).await {
-                Ok(_) => ApiResponse::Success("Success.".into()),
+                Ok(_) => ApiResponse::Success(json!("Success.")),
                 Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
             },
             Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
@@ -267,7 +268,7 @@ async fn link_rsi_account(
                     .await
                     .map_err(ApiResponse::InternalServerErrorWithMessage)
                     .unwrap();
-                ApiResponse::Success("Success".into())
+                ApiResponse::Success(json!("Success"))
             } else {
                 ApiResponse::MissingData
             }
