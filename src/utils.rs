@@ -4,10 +4,11 @@ use argon2::{
     Argon2,
 };
 use axum::{
-    body::Body,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use serde::Serialize;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::model::{AuthToken, RefreshToken, Scope};
@@ -57,6 +58,7 @@ pub async fn generate_token_pair(
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum ApiResponse {
     Unauthorized,
     NotFound,
@@ -65,32 +67,60 @@ pub enum ApiResponse {
     InternalServerErrorWithMessage(Error),
     NotImplemented,
     ResourceExists,
-    Success,
+    Success(Value),
+}
+
+impl ToString for ApiResponse {
+    fn to_string(&self) -> String {
+        match self {
+            ApiResponse::Unauthorized => "403",
+            ApiResponse::NotFound => "404",
+            ApiResponse::MissingData => "400",
+            ApiResponse::InternalServerError => "500",
+            ApiResponse::InternalServerErrorWithMessage(_) => "500",
+            ApiResponse::NotImplemented => "501",
+            ApiResponse::ResourceExists => "409",
+            ApiResponse::Success(_) => "200",
+        }
+        .into()
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct ApiResponseBody {
+    status: String,
+    payload: Value,
 }
 
 impl IntoResponse for ApiResponse {
     fn into_response(self) -> axum::response::Response {
-        let (status, message) = match self {
-            ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, Body::from("Unauthorized.")),
+        let (status, payload) = match self {
+            ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized.".to_string()),
             ApiResponse::MissingData => {
-                (StatusCode::PARTIAL_CONTENT, Body::from("Fields missing."))
+                (StatusCode::PARTIAL_CONTENT, "Fields missing.".to_string())
             }
             ApiResponse::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Body::from("Something happened."),
+                "Something happened.".to_string(),
             ),
-            ApiResponse::InternalServerErrorWithMessage(e) => (
+            ApiResponse::InternalServerErrorWithMessage(ref e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Body::from(format!("An error occurred: {}", e)),
+                format!("An error occurred: {}", e),
             ),
-            ApiResponse::NotImplemented => (StatusCode::NOT_IMPLEMENTED, Body::empty()),
-            ApiResponse::NotFound => (StatusCode::NOT_FOUND, Body::from("Not found.")),
-            ApiResponse::ResourceExists => (StatusCode::CONFLICT, Body::from("Resource exists.")),
-            ApiResponse::Success => (StatusCode::OK, Body::empty()),
+            ApiResponse::NotImplemented => {
+                (StatusCode::NOT_IMPLEMENTED, "Not implemented.".to_string())
+            }
+            ApiResponse::NotFound => (StatusCode::NOT_FOUND, "Not found.".to_string()),
+            ApiResponse::ResourceExists => (StatusCode::CONFLICT, "Resource exists.".to_string()),
+            ApiResponse::Success(ref v) => (StatusCode::OK, v.to_string()),
+        };
+        let body = ApiResponseBody {
+            status: self.to_string(),
+            payload: payload.into(),
         };
         Response::builder()
             .status(status)
-            .body(message)
+            .body(serde_json::to_string_pretty(&body).unwrap_or_default())
             .unwrap()
             .into_response()
     }

@@ -30,7 +30,7 @@ pub fn get_router() -> Router {
 async fn test_oauth(
     Extension(current_user): Extension<User>,
     Json(auth): Json<AuthReview>,
-) -> Result<Json<Uuid>, ApiResponse> {
+) -> ApiResponse {
     let mut hasher = Sha256::new();
     hasher.update(format!("{}{}", auth.user_id, auth.app_id));
     let result = hasher.finalize();
@@ -53,17 +53,13 @@ async fn test_oauth(
             .await
             .unwrap();
             // redirect to endpoint
-            Ok(Json(r.id))
+            ApiResponse::Success(r.id.to_string().into())
         }
-        Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
+        Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!(
             "Could not associate user with application."
-        ))),
+        )),
     }
 }
-
-// TODO: application get-auth-token
-// Params: application id, `corvus-auth` key
-// Returns: Authkey tied to user (using scopes)
 
 pub async fn init_authorization(
     app_id: Query<Uuid>,
@@ -71,7 +67,7 @@ pub async fn init_authorization(
     state: Query<String>,
     scopes: Query<String>,
     Extension(current_user): Extension<User>,
-) -> Result<Json<AuthReview>, ApiResponse> {
+) -> ApiResponse {
     // flow:
     // hit `authorize` with appid, etc, returns a token and a view of the app/scopes you're allowing
     // hit the continue endpoint with token acts as "acceptance" returns a redirect to the redirect_uri with the token and state
@@ -101,12 +97,12 @@ pub async fn init_authorization(
                 scopes: s,
                 state: st,
             };
-            Ok(Json(review))
+            ApiResponse::Success(serde_json::to_value(review).unwrap())
         } else {
-            Err(ApiResponse::MissingData)
+            ApiResponse::MissingData
         }
     } else {
-        Err(ApiResponse::NotFound)
+        ApiResponse::NotFound
     }
 }
 

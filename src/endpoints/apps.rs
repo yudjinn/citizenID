@@ -13,6 +13,7 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_apps))
         .route("/", post(create_app))
+        .route("/:app_id", get(get_app))
         .route("/:app_id", delete(delete_app))
         .route("/:app_id", patch(update_callbacks))
         .layer(middleware::from_fn(auth_middleware))
@@ -27,9 +28,25 @@ async fn get_apps(
     )
     .await
     {
-        Ok(user) => Ok(Json(
-            user.clone().iter().map(|a| a.to_owned().into()).collect(),
+        Ok(apps) => Ok(Json(
+            apps.clone().iter().map(|a| a.to_owned().into()).collect(),
         )),
+        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+    }
+}
+
+async fn get_app(
+    Extension(current_user): Extension<User>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApplicationResponse>, ApiResponse> {
+    match db_handler::get_item_from_table_with_filter_by_id::<Application>(&id.to_string()).await {
+        Ok(Some(app)) => {
+            if app.user_id == current_user.id {
+                return Ok(Json(app.into()));
+            }
+            Err(ApiResponse::Unauthorized)
+        }
+        Ok(None) => Err(ApiResponse::NotFound),
         Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
     }
 }

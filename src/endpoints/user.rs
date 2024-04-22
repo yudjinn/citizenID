@@ -12,7 +12,7 @@ use crate::{
     db_handler,
     model::{
         ApprovedApplication, CreateUserEmail, RSILinkUser, RefreshToken, Scope, Scopes, UpdateUser,
-        User, UserResponse, UserStatus,
+        User, UserStatus,
     },
     utils::{hash_password, ApiResponse},
     MASTER_APP_ID,
@@ -35,7 +35,7 @@ pub fn get_router() -> Router {
 async fn get_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
-) -> Result<Json<UserResponse>, ApiResponse> {
+) -> ApiResponse {
     if Scope::check_scopes(&_scopes, &crate::model::Scope::GetUserFull) {
         // Regular login -> tokin with full scope
         // Oauth -> just id/rsi_id/status?
@@ -48,58 +48,54 @@ async fn get_user(
                 if user.status != UserStatus::Inactive && user.status != UserStatus::Unknown {
                     let user_resp = user.clone();
 
-                    Ok(Json(user_resp.into()))
+                    ApiResponse::Success(serde_json::to_value(user_resp).unwrap())
                 } else {
-                    Err(ApiResponse::Unauthorized)
+                    ApiResponse::Unauthorized
                 }
             }
-            Ok(None) => Err(ApiResponse::NotFound),
-            Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+            Ok(None) => ApiResponse::NotFound,
+            Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
     } else {
-        Err(ApiResponse::Unauthorized)
+        ApiResponse::Unauthorized
     }
 }
 
 async fn delete_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
-) -> Result<(), ApiResponse> {
+) -> ApiResponse {
     if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
         let mut user = current_user.clone();
         user.status = UserStatus::Inactive;
         match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
             Ok(_) => match RefreshToken::invalidate_all_for_user(current_user.id).await {
-                Ok(_) => Ok(()),
-                Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                Ok(_) => ApiResponse::Success("Success.".into()),
+                Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
             },
-            Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+            Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
     } else {
-        Err(ApiResponse::Unauthorized)
+        ApiResponse::Unauthorized
     }
 }
 
-async fn get_approved_applications(
-    Extension(current_user): Extension<User>,
-) -> Result<Json<Vec<ApprovedApplication>>, ApiResponse> {
+async fn get_approved_applications(Extension(current_user): Extension<User>) -> ApiResponse {
     match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
         "user_id",
         &current_user.id.to_string(),
     )
     .await
     {
-        Ok(apps) => Ok(Json(apps)),
-        Err(_) => Err(ApiResponse::NotFound),
+        Ok(apps) => ApiResponse::Success(serde_json::to_value(apps).unwrap()),
+        Err(_) => ApiResponse::NotFound,
     }
 }
 
-async fn create_user_from_email(
-    user: Json<CreateUserEmail>,
-) -> Result<Json<UserResponse>, ApiResponse> {
+async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
     // check the item doesnt already exist
     match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &user.email).await {
-        Ok(Some(_)) => Err(ApiResponse::ResourceExists),
+        Ok(Some(_)) => ApiResponse::ResourceExists,
         Ok(None) => {
             match User::new_from_email(&user.email, &user.password).await {
                 Ok(new) => match db_handler::put_item::<User>(new).await {
@@ -112,16 +108,16 @@ async fn create_user_from_email(
                             scopes: Scope::all(),
                         };
                         match db_handler::put_item::<ApprovedApplication>(aa).await {
-                            Ok(_) => Ok(Json(u.into())),
-                            Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not generate access, please contact support with user_id: {}", u.id)))
+                            Ok(_) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
+                            Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not generate access, please contact support with user_id: {}", u.id))
                         }
                     }
-                    Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                    Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
                 },
-                Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
             }
         }
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
     }
 }
 
@@ -129,7 +125,7 @@ async fn update_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
     update: Json<UpdateUser>,
-) -> Result<Json<UserResponse>, ApiResponse> {
+) -> ApiResponse {
     // check the item doesnt already exist
     if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
         match db_handler::get_item_from_table_with_filter_by_id::<User>(
@@ -150,36 +146,37 @@ async fn update_user(
                             obj.salt = Some(s);
                             invalidate = true;
                         }
-                        Err(e) => return Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                        Err(e) => return ApiResponse::InternalServerErrorWithMessage(e),
                     }
                 }
                 if invalidate {
                     RefreshToken::invalidate_all_for_user(current_user.id)
                         .await
-                        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                        .map_err(ApiResponse::InternalServerErrorWithMessage)
+                        .unwrap();
                 }
                 match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
-                    Ok(u) => Ok(Json(u.into())),
-                    Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(e)),
+                    Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
+                    Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
                 }
             }
-            Ok(None) => Err(ApiResponse::NotFound),
-            Err(_) => Err(ApiResponse::InternalServerError),
+            Ok(None) => ApiResponse::NotFound,
+            Err(_) => ApiResponse::InternalServerError,
         }
     } else {
-        Err(ApiResponse::Unauthorized)
+        ApiResponse::Unauthorized
     }
 }
 
 async fn begin_rsi_link(
     Extension(current_user): Extension<User>,
     Extension(scopes): Extension<Scopes>,
-) -> Result<Json<RSILinkUser>, ApiResponse> {
+) -> ApiResponse {
     if Scope::check_scopes(&scopes, &Scope::SetRSIID) {
         let ret: RSILinkUser = current_user.into();
-        Ok(Json(ret))
+        ApiResponse::Success(serde_json::to_value(ret).unwrap())
     } else {
-        Err(ApiResponse::Unauthorized)
+        ApiResponse::Unauthorized
     }
 }
 
@@ -218,23 +215,22 @@ async fn link_rsi_account(
     Query(query): Query<RsiQs>,
     Extension(current_user): Extension<User>,
     Extension(scopes): Extension<Scopes>,
-) -> Result<ApiResponse, ApiResponse> {
+) -> ApiResponse {
     let rsi_account_name = query.account_name;
     if !Scope::check_scopes(&scopes, &Scope::SetRSIID) {
-        return Err(ApiResponse::Unauthorized);
+        return ApiResponse::Unauthorized;
     }
 
     if rsi_account_name.is_empty() {
-        return Err(ApiResponse::MissingData);
+        return ApiResponse::MissingData;
     }
 
-    if db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
+    if !db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
         .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)?
-        .len()
-        > 0
+        .unwrap()
+        .is_empty()
     {
-        return Err(ApiResponse::ResourceExists);
+        return ApiResponse::ResourceExists;
     };
 
     let endpoint = "https://robertsspaceindustries.com/community-hub/api/v1/graphql";
@@ -269,14 +265,13 @@ async fn link_rsi_account(
                 update.status = UserStatus::Active;
                 db_handler::put_item::<User>(update)
                     .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-                Ok(ApiResponse::Success)
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)
+                    .unwrap();
+                ApiResponse::Success("Success".into())
             } else {
-                Err(ApiResponse::MissingData)
+                ApiResponse::MissingData
             }
         }
-        Err(e) => Err(ApiResponse::InternalServerErrorWithMessage(
-            anyhow::Error::msg(e),
-        )),
+        Err(e) => ApiResponse::InternalServerErrorWithMessage(anyhow::Error::msg(e)),
     }
 }

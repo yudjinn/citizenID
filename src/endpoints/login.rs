@@ -39,14 +39,12 @@ pub fn get_router() -> Router {
 
 async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiResponse {
     match RefreshToken::invalidate_all_for_user(current_user.id).await {
-        Ok(_) => ApiResponse::Success,
+        Ok(_) => ApiResponse::Success("Success".into()),
         _ => ApiResponse::InternalServerError,
     }
 }
 
-async fn login_with_email(
-    extract::Json(login): extract::Json<LoginUser>,
-) -> Result<Json<AuthResponse>, ApiResponse> {
+async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> ApiResponse {
     match login {
         LoginUser {
             email: Some(email),
@@ -66,7 +64,7 @@ async fn login_with_email(
                     Ok(Some(user)) => {
                         // if the user doesnt have a password set
                         if user.hashed_password.is_none() || user.salt.is_none() {
-                            return Err(ApiResponse::Unauthorized);
+                            return ApiResponse::Unauthorized;
                         }
                         match Scope::check_user_app_relationship(user.id, app.id).await {
                             Ok(scopes) => {
@@ -81,40 +79,46 @@ async fn login_with_email(
                                                 .await
                                                 .map_err(
                                                     ApiResponse::InternalServerErrorWithMessage,
-                                                )?;
+                                                )
+                                                .unwrap();
                                         let signed_ref_token =
                                             encode(&Header::default(), &r, &KEYS.encoding)
-                                                .map_err(|_| ApiResponse::InternalServerError)?;
+                                                .map_err(|_| ApiResponse::InternalServerError)
+                                                .unwrap();
                                         let signed_auth_token =
                                             encode(&Header::default(), &a, &KEYS.encoding)
-                                                .map_err(|_| ApiResponse::InternalServerError)?;
+                                                .map_err(|_| ApiResponse::InternalServerError)
+                                                .unwrap();
 
-                                        Ok(Json(AuthResponse {
-                                            auth_token: signed_auth_token,
-                                            refresh_token: signed_ref_token,
-                                        }))
+                                        ApiResponse::Success(
+                                            serde_json::to_value(AuthResponse {
+                                                auth_token: signed_auth_token,
+                                                refresh_token: signed_ref_token,
+                                            })
+                                            .unwrap(),
+                                        )
                                     } else {
-                                        Err(ApiResponse::Unauthorized)
+                                        ApiResponse::Unauthorized
                                     }
                                 } else {
-                                    Err(ApiResponse::InternalServerError)
+                                    ApiResponse::InternalServerError
                                 }
                             }
-                            _ => Err(ApiResponse::Unauthorized),
+                            _ => ApiResponse::Unauthorized,
                         }
                     }
-                    Ok(None) => Err(ApiResponse::NotFound),
-                    Err(_) => Err(ApiResponse::InternalServerError),
+                    Ok(None) => ApiResponse::NotFound,
+                    Err(_) => ApiResponse::InternalServerError,
                 }
             } else {
-                Err(ApiResponse::NotFound)
+                ApiResponse::NotFound
             }
         }
-        _ => Err(ApiResponse::MissingData),
+        _ => ApiResponse::MissingData,
     }
 }
 
-async fn logout_user(req: Request<Body>) -> Result<ApiResponse, ApiResponse> {
+async fn logout_user(req: Request<Body>) -> ApiResponse {
     let refresh_header = req
         .headers()
         .get("refresh_token")
@@ -123,24 +127,24 @@ async fn logout_user(req: Request<Body>) -> Result<ApiResponse, ApiResponse> {
     let refresh_header = if let Some(refresh_header) = refresh_header {
         refresh_header
     } else {
-        return Err(ApiResponse::MissingData);
+        return ApiResponse::MissingData;
     };
 
     let mut refresh_token = RefreshToken::from_header_str(refresh_header)
         .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+        .map_err(ApiResponse::InternalServerErrorWithMessage)
+        .unwrap();
 
     // nuke the token
     refresh_token
         .invalidate()
         .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-    Ok(ApiResponse::Success)
+        .map_err(ApiResponse::InternalServerErrorWithMessage)
+        .unwrap();
+    ApiResponse::Success("Success".into())
 }
 
-async fn login_with_discord(
-    Json(token): Json<DiscordTokenLogin>,
-) -> Result<Json<AuthResponse>, ApiResponse> {
+async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse {
     // make subcall to `/users/@me`
     let client = reqwest::Client::new();
     let discord_response = client
@@ -171,18 +175,24 @@ async fn login_with_discord(
                     // user exists, login
                     let (r, a) = generate_token_pair(user.id, token.app_id, None, scopes)
                         .await
-                        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                        .map_err(ApiResponse::InternalServerErrorWithMessage)
+                        .unwrap();
                     let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                        .map_err(|_| ApiResponse::InternalServerError)?;
+                        .map_err(|_| ApiResponse::InternalServerError)
+                        .unwrap();
                     let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                        .map_err(|_| ApiResponse::InternalServerError)?;
+                        .map_err(|_| ApiResponse::InternalServerError)
+                        .unwrap();
 
-                    Ok(Json(AuthResponse {
-                        auth_token: signed_auth_token,
-                        refresh_token: signed_ref_token,
-                    }))
+                    ApiResponse::Success(
+                        serde_json::to_value(AuthResponse {
+                            auth_token: signed_auth_token,
+                            refresh_token: signed_ref_token,
+                        })
+                        .unwrap(),
+                    )
                 }
-                Err(_) => Err(ApiResponse::Unauthorized),
+                Err(_) => ApiResponse::Unauthorized,
             }
         } else {
             // user doesnt exist, create
@@ -200,59 +210,65 @@ async fn login_with_discord(
                         // user exists, login
                         let (r, a) = generate_token_pair(user.id, token.app_id, None, aa.scopes)
                             .await
-                            .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                            .map_err(ApiResponse::InternalServerErrorWithMessage)
+                            .unwrap();
                         let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                            .map_err(|_| ApiResponse::InternalServerError)?;
+                            .map_err(|_| ApiResponse::InternalServerError)
+                            .unwrap();
                         let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                            .map_err(|_| ApiResponse::InternalServerError)?;
+                            .map_err(|_| ApiResponse::InternalServerError)
+                            .unwrap();
 
-                        Ok(Json(AuthResponse {
-                            auth_token: signed_auth_token,
-                            refresh_token: signed_ref_token,
-                        }))
+                        ApiResponse::Success(
+                            serde_json::to_value(AuthResponse {
+                                auth_token: signed_auth_token,
+                                refresh_token: signed_ref_token,
+                            })
+                            .unwrap(),
+                        )
                     }
-                    Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
+                    Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!(
                         "Could not generate access, please contact support with user_id: {}",
                         user.id
-                    ))),
+                    )),
                 }
             } else {
-                Err(ApiResponse::InternalServerError)
+                ApiResponse::InternalServerError
             }
         }
     } else {
-        Err(ApiResponse::NotFound)
+        ApiResponse::NotFound
     }
 }
 
 async fn revoke_discord(
     Extension(mut current_user): Extension<User>,
     Extension(scopes): Extension<Scopes>,
-) -> Result<ApiResponse, ApiResponse> {
+) -> ApiResponse {
     if !Scope::check_scopes(&scopes, &Scope::SetDiscordID) {
-        return Err(ApiResponse::Unauthorized);
+        return ApiResponse::Unauthorized;
     }
     if let Some(_sf) = current_user.discord_sf {
         if current_user.email.is_some() && current_user.hashed_password.is_some() {
             current_user.discord_sf = None;
             db_handler::put_item::<User>(current_user)
                 .await
-                .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-            Ok(ApiResponse::Success)
+                .map_err(ApiResponse::InternalServerErrorWithMessage)
+                .unwrap();
+            ApiResponse::Success("Success".into())
         } else {
-            Err(ApiResponse::MissingData)
+            ApiResponse::MissingData
         }
     } else {
-        Err(ApiResponse::NotFound)
+        ApiResponse::NotFound
     }
 }
 
-async fn get_new_token(
-    extract::Json(token): extract::Json<RefreshTokenRequest>,
-) -> Result<Json<AuthResponse>, ApiResponse> {
+async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>) -> ApiResponse {
     let token = RefreshToken::from_header_str(&token.refresh_token)
         .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+        .map_err(ApiResponse::InternalServerErrorWithMessage)
+        .unwrap();
     match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash()).await {
         Ok(Some(t)) => {
             let mut token = token;
@@ -260,31 +276,39 @@ async fn get_new_token(
                 let (r, a) =
                     generate_token_pair(token.user_id, t.app_id, Some(token.family), t.scopes)
                         .await
-                        .map_err(|_| ApiResponse::InternalServerError)?;
+                        .map_err(|_| ApiResponse::InternalServerError)
+                        .unwrap();
                 token
                     .invalidate()
                     .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)
+                    .unwrap();
 
                 let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                    .map_err(|_| ApiResponse::InternalServerError)?;
+                    .map_err(|_| ApiResponse::InternalServerError)
+                    .unwrap();
                 let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                    .map_err(|_| ApiResponse::InternalServerError)?;
+                    .map_err(|_| ApiResponse::InternalServerError)
+                    .unwrap();
 
-                Ok(Json(AuthResponse {
-                    auth_token: signed_auth_token,
-                    refresh_token: signed_ref_token,
-                }))
+                ApiResponse::Success(
+                    serde_json::to_value(AuthResponse {
+                        auth_token: signed_auth_token,
+                        refresh_token: signed_ref_token,
+                    })
+                    .unwrap(),
+                )
             } else {
                 // Might be a rewind attack, invalidate family
                 RefreshToken::invalidate_all_for_family(token.family)
                     .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)?;
-                Err(ApiResponse::Unauthorized)
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)
+                    .unwrap();
+                ApiResponse::Unauthorized
             }
         }
-        Ok(None) => Err(ApiResponse::Unauthorized),
-        Err(_) => Err(ApiResponse::InternalServerError),
+        Ok(None) => ApiResponse::Unauthorized,
+        Err(_) => ApiResponse::InternalServerError,
     }
 }
 

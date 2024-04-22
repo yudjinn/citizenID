@@ -537,6 +537,7 @@ impl From<Application> for ApplicationResponse {
             id: value.id,
             callback_uris: value.callback_uris,
             status: value.status,
+            name: value.name,
         }
     }
 }
@@ -560,6 +561,7 @@ impl ApplicationRequest {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct ApplicationResponse {
     pub id: Uuid,
+    pub name: String,
     pub callback_uris: Vec<String>,
     pub status: AppStatus,
 }

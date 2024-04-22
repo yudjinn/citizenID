@@ -105,11 +105,18 @@ POST "/user" : {
 
 🔒  DELETE "/applications/{app_id}" : {} => {}
 
-🔒  PATCH "/applications/update/{app_id}" : {
+🔒  PATCH "/applications/{app_id}" : {
 		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
 } => {
+		id: Uuid,
+		name: String,
+		callback_uris: List<String>,
+		status: [Active, Inactive,  Unknown],
+}
+
+🔒  GET "/applications/{app_id}" : {} => {
 		id: Uuid,
 		name: String,
 		callback_uris: List<String>,
