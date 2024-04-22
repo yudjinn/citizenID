@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 pub mod db;
 pub use db::db as db_handler;
 use serde_json::json;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use utils::ApiResponse;
 pub mod endpoints;
 pub mod error;
@@ -32,7 +32,14 @@ lazy_static! {
         .unwrap()
         .split(' ')
         .map(|s| s.to_owned())
+        .filter(|p| !p.is_empty())
         .collect();
+    static ref CORS_ALLOW_CREDENTIALS: bool = std::env::var_os("CORS_ALLOW_CREDENTIALS")
+        .unwrap_or("false".into())
+        .into_string()
+        .unwrap()
+        .parse::<bool>()
+        .unwrap();
     static ref MASTER_APP_ID: uuid::Uuid = uuid::Uuid::parse_str(
         &std::env::var_os("MASTER_APP_ID")
             .unwrap_or("adaf40f8-0f79-4dd0-a995-912604ccde95".into())
@@ -66,8 +73,9 @@ async fn main() -> Result<(), RuntimeError> {
         .iter_mut()
         .map(|v| v.parse::<HeaderValue>().unwrap())
         .collect();
+    let cors_creds = *CORS_ALLOW_CREDENTIALS;
 
-    let cors = CorsLayer::new()
+    let mut cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -79,8 +87,14 @@ async fn main() -> Result<(), RuntimeError> {
             CONTENT_TYPE,
             HeaderName::from_lowercase(b"auth_token").unwrap(),
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
-        ])
-        .allow_origin(cors_origins);
+        ]);
+    if cors_creds && !cors_origins.is_empty() {
+        cors = cors.allow_credentials(true).allow_origin(cors_origins);
+    } else if !cors_creds && cors_origins.is_empty() {
+        cors = cors.allow_origin(Any);
+    } else {
+        panic!("Invalid CORS Configuration.");
+    }
 
     let app = Router::new()
         .route("/health", get(health))
