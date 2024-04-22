@@ -2,12 +2,13 @@ name: Corvus Backend
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "staging" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "staging" ]
 
 env:
   CARGO_TERM_COLOR: always
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
 
 jobs:
   build:
@@ -29,3 +30,19 @@ jobs:
         name: lambda
         path: bootstrap
         retention-days: 14
+    - uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+    - run: zip -j lambda.zip ./bootstrap
+    # TODO: use this when staging is a real thing
+    # - run: | 
+    #     aws lambda update-function-code --function-name \
+    #       ${{ env.BRANCH_NAME == 'main' && 'corvus-production' || env.BRANCH_NAME == 'staging' && 'corvus-staging' || 'UNKNOWN' }} \
+    #       --zip-file=fileb://lambda.zip
+    - run: | 
+        aws lambda update-function-code --function-name \
+          'corvus-staging' \
+          --zip-file=fileb://lambda.zip
+      
