@@ -115,7 +115,7 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                 ApiResponse::NotFound
             }
         }
-        _ => ApiResponse::MissingData,
+        _ => ApiResponse::MissingData(json!("Missing either email or password.")),
     }
 }
 
@@ -128,7 +128,7 @@ async fn logout_user(req: Request<Body>) -> ApiResponse {
     let refresh_header = if let Some(refresh_header) = refresh_header {
         refresh_header
     } else {
-        return ApiResponse::MissingData;
+        return ApiResponse::MissingData(json!("refresh_token required to logout."));
     };
 
     let mut refresh_token = RefreshToken::from_header_str(refresh_header)
@@ -258,7 +258,7 @@ async fn revoke_discord(
                 .unwrap();
             ApiResponse::Success(json!("Success"))
         } else {
-            ApiResponse::MissingData
+            ApiResponse::MissingData(json!("User requires email/password login enabled."))
         }
     } else {
         ApiResponse::NotFound

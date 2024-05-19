@@ -1,6 +1,6 @@
 use axum::extract::{self, Path};
 use axum::routing::{delete, patch, post};
-use axum::{middleware, routing::get, Extension, Json, Router};
+use axum::{middleware, routing::get, Extension, Router};
 use serde_json::json;
 use uuid::Uuid;
 

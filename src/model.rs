@@ -6,6 +6,7 @@ use anyhow::{Error, Result};
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use strum::IntoEnumIterator;
@@ -398,6 +399,10 @@ impl From<User> for UserResponse {
 
 impl User {
     pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
+        let re = Regex::new(r"^[^@\s]*?@[^@\s]*?\.[^@\s]*$").unwrap();
+        if re.captures(email).is_none() {
+            return Err(anyhow::anyhow!("Invalid email format."));
+        }
         let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();
         let sentinel = Self::generate_sentinel(id).await;

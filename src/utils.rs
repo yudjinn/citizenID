@@ -62,7 +62,7 @@ pub async fn generate_token_pair(
 pub enum ApiResponse {
     Unauthorized,
     NotFound,
-    MissingData,
+    MissingData(Value),
     InternalServerError,
     InternalServerErrorWithMessage(Error),
     NotImplemented,
@@ -75,7 +75,7 @@ impl From<ApiResponse> for u16 {
         match val {
             ApiResponse::Unauthorized => 403,
             ApiResponse::NotFound => 404,
-            ApiResponse::MissingData => 400,
+            ApiResponse::MissingData(_) => 400,
             ApiResponse::InternalServerError => 500,
             ApiResponse::InternalServerErrorWithMessage(_) => 500,
             ApiResponse::NotImplemented => 501,
@@ -95,7 +95,7 @@ impl IntoResponse for ApiResponse {
     fn into_response(self) -> axum::response::Response {
         let (status, payload) = match self {
             ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, json!("Unauthorized.")),
-            ApiResponse::MissingData => (StatusCode::PARTIAL_CONTENT, json!("Fields missing.")),
+            ApiResponse::MissingData(ref val) => (StatusCode::PARTIAL_CONTENT, val.clone()),
             ApiResponse::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 json!("Something happened."),

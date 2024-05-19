@@ -223,7 +223,7 @@ async fn link_rsi_account(
     }
 
     if rsi_account_name.is_empty() {
-        return ApiResponse::MissingData;
+        return ApiResponse::MissingData(json!("Account name not specified."));
     }
 
     if !db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
@@ -270,7 +270,7 @@ async fn link_rsi_account(
                     .unwrap();
                 ApiResponse::Success(json!("Success"))
             } else {
-                ApiResponse::MissingData
+                ApiResponse::MissingData(json!("Sentinel value not found in bio."))
             }
         }
         Err(e) => ApiResponse::InternalServerErrorWithMessage(anyhow::Error::msg(e)),

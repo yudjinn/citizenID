@@ -100,7 +100,7 @@ pub async fn init_authorization(
             };
             ApiResponse::Success(serde_json::to_value(review).unwrap())
         } else {
-            ApiResponse::MissingData
+            ApiResponse::MissingData(json!("redirect_uri is required."))
         }
     } else {
         ApiResponse::NotFound
