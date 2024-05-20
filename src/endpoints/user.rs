@@ -13,7 +13,7 @@ use crate::{
     db_handler,
     model::{
         ApprovedApplication, CreateUserEmail, RSILinkUser, RefreshToken, Scope, Scopes, UpdateUser,
-        User, UserStatus,
+        User, UserResponse, UserStatus,
     },
     utils::{hash_password, ApiResponse},
     MASTER_APP_ID,
@@ -49,7 +49,9 @@ async fn get_user(
                 if user.status != UserStatus::Inactive && user.status != UserStatus::Unknown {
                     let user_resp = user.clone();
 
-                    ApiResponse::Success(serde_json::to_value(user_resp).unwrap())
+                    ApiResponse::Success(
+                        serde_json::to_value(UserResponse::from(user_resp)).unwrap(),
+                    )
                 } else {
                     ApiResponse::Unauthorized
                 }
@@ -95,6 +97,9 @@ async fn get_approved_applications(Extension(current_user): Extension<User>) -> 
 
 async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
     // check the item doesnt already exist
+    if let Err(r) = user.is_valid_payload().await {
+        return r;
+    }
     match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &user.email).await {
         Ok(Some(_)) => ApiResponse::ResourceExists,
         Ok(None) => {
@@ -109,7 +114,7 @@ async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
                             scopes: Scope::all(),
                         };
                         match db_handler::put_item::<ApprovedApplication>(aa).await {
-                            Ok(_) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
+                            Ok(_) => ApiResponse::Success(serde_json::to_value(UserResponse::from(u)).unwrap()),
                             Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not generate access, please contact support with user_id: {}", u.id))
                         }
                     }
@@ -129,6 +134,9 @@ async fn update_user(
 ) -> ApiResponse {
     // check the item doesnt already exist
     if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
+        if let Err(r) = update.is_valid_payload().await {
+            return r;
+        }
         match db_handler::get_item_from_table_with_filter_by_id::<User>(
             &current_user.id.to_string(),
         )
@@ -157,7 +165,9 @@ async fn update_user(
                         .unwrap();
                 }
                 match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
-                    Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
+                    Ok(u) => {
+                        ApiResponse::Success(serde_json::to_value(UserResponse::from(u)).unwrap())
+                    }
                     Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
                 }
             }

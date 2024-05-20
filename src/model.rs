@@ -8,11 +8,13 @@ use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
+use crate::utils::ApiResponse;
 use crate::{db_handler, utils::hash_password};
 use crate::{KEYS, MASTER_APP_ID};
 
@@ -400,10 +402,6 @@ impl From<User> for UserResponse {
 
 impl User {
     pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
-        let re = Regex::new(r"^[^@\s]*?@[^@\s]*?\.[^@\s]*$").unwrap();
-        if re.captures(email).is_none() {
-            return Err(anyhow::anyhow!("Invalid email format."));
-        }
         let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();
         let sentinel = Self::generate_sentinel(id).await;
@@ -475,6 +473,26 @@ pub struct UpdateUser {
     pub password: Option<String>,
 }
 
+impl UpdateUser {
+    pub async fn is_valid_payload(&self) -> Result<(), ApiResponse> {
+        if self.email.is_some() {
+            let re = Regex::new(r"^[^@\s]*?@[^@\s]*?\.[^@\s]*$").unwrap();
+            if re.captures(self.email.as_ref().unwrap()).is_none() {
+                return Err(ApiResponse::MissingData(json!("Invalid email format.")));
+            }
+        }
+        if self.password.is_some()
+            && (self.password.as_ref().unwrap().len() < 8
+                || self.password.as_ref().unwrap().len() > 20)
+        {
+            return Err(ApiResponse::MissingData(json!(
+                "Password must be between 8-20 characters."
+            )));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LoginUser {
     pub email: Option<String>,
@@ -487,6 +505,21 @@ pub struct LoginUser {
 pub struct CreateUserEmail {
     pub email: String,
     pub password: String,
+}
+
+impl CreateUserEmail {
+    pub async fn is_valid_payload(&self) -> Result<(), ApiResponse> {
+        let re = Regex::new(r"^[^@\s]*?@[^@\s]*?\.[^@\s]*$").unwrap();
+        if re.captures(&self.email).is_none() {
+            return Err(ApiResponse::MissingData(json!("Invalid email format.")));
+        }
+        if self.password.len() < 8 || self.password.len() > 20 {
+            return Err(ApiResponse::MissingData(json!(
+                "Password must be between 8-20 characters."
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
