@@ -96,18 +96,23 @@ async fn update_callbacks(
     }
 }
 
-async fn delete_app(Extension(current_user): Extension<User>, app_id: String) -> ApiResponse {
+async fn delete_app(
+    Extension(current_user): Extension<User>,
+    Path(app_id): Path<String>,
+) -> ApiResponse {
     match db_handler::get_item_from_table_with_filter_by_id::<Application>(&app_id).await {
         Ok(Some(app)) => {
             if current_user.id != app.user_id {
                 return ApiResponse::Unauthorized;
             }
-            match db_handler::delete_item::<Application>(app.id).await {
+            match db_handler::delete_item::<Application>(app.id.to_string()).await {
                 Ok(_) => ApiResponse::Success(json!("Success.")),
                 Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
             }
         }
         Ok(None) => ApiResponse::NotFound,
-        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+        Err(e) => {
+            ApiResponse::InternalServerErrorWithMessage(anyhow::anyhow!("Could not fetch: {}", e))
+        }
     }
 }

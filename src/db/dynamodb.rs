@@ -12,7 +12,6 @@ use aws_sdk_dynamodb::{
 use serde::{Deserialize, Serialize};
 use serde_dynamo::aws_sdk_dynamodb_0_33::{from_items, to_item};
 use tokio::sync::OnceCell;
-use uuid::Uuid;
 
 use crate::model::Model;
 
@@ -151,19 +150,21 @@ where
         .key_condition_expression("#id = :id")
         .expression_attribute_names("#id", "id")
         .expression_attribute_values(":id", AttributeValue::S(value.to_owned()));
-    let result = req.send().await?;
-
-    if let Some(items) = result.items {
-        let t: Vec<T> = from_items(items)?;
-        let ret: T = t
-            .first()
-            .ok_or(Error::msg(format!(
-                "Item [{}]<{}> was not found.",
-                std::any::type_name::<T>(),
-                value
-            )))?
-            .clone();
-        Ok(Some(ret.clone()))
+    if let Ok(result) = req.send().await {
+        if let Some(items) = result.items {
+            let t: Vec<T> = from_items(items)?;
+            let ret: T = t
+                .first()
+                .ok_or(Error::msg(format!(
+                    "Item [{}]<{}> was not found.",
+                    std::any::type_name::<T>(),
+                    value
+                )))?
+                .clone();
+            Ok(Some(ret.clone()))
+        } else {
+            Ok(None)
+        }
     } else {
         Ok(None)
     }
@@ -183,7 +184,7 @@ where
     Ok(item)
 }
 
-pub async fn delete_item<T>(id: Uuid) -> Result<()>
+pub async fn delete_item<T>(id: String) -> Result<()>
 where
     T: Model + Serialize + for<'a> Deserialize<'a> + Clone,
 {
@@ -192,7 +193,7 @@ where
     let request = client
         .delete_item()
         .table_name(T::TABLE)
-        .key(id, AttributeValue::S(id.into()));
+        .key("id", AttributeValue::S(id));
     let _resp = request.send().await?;
 
     Ok(())

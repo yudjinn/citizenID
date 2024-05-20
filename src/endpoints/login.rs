@@ -266,50 +266,52 @@ async fn revoke_discord(
 }
 
 async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>) -> ApiResponse {
-    let token = RefreshToken::from_header_str(&token.refresh_token)
-        .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)
-        .unwrap();
-    match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash()).await {
-        Ok(Some(t)) => {
-            let mut token = token;
-            if t.valid && token.app_id == t.app_id {
-                let (r, a) =
-                    generate_token_pair(token.user_id, t.app_id, Some(token.family), t.scopes)
+    if let Ok(token) = RefreshToken::from_header_str(&token.refresh_token).await {
+        match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash())
+            .await
+        {
+            Ok(Some(t)) => {
+                let mut token = token;
+                if t.valid && token.app_id == t.app_id {
+                    let (r, a) =
+                        generate_token_pair(token.user_id, t.app_id, Some(token.family), t.scopes)
+                            .await
+                            .map_err(|_| ApiResponse::InternalServerError)
+                            .unwrap();
+                    token
+                        .invalidate()
                         .await
+                        .map_err(ApiResponse::InternalServerErrorWithMessage)
+                        .unwrap();
+
+                    let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
-                token
-                    .invalidate()
-                    .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)
-                    .unwrap();
+                    let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                        .map_err(|_| ApiResponse::InternalServerError)
+                        .unwrap();
 
-                let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                    .map_err(|_| ApiResponse::InternalServerError)
-                    .unwrap();
-                let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                    .map_err(|_| ApiResponse::InternalServerError)
-                    .unwrap();
-
-                ApiResponse::Success(
-                    serde_json::to_value(AuthResponse {
-                        auth_token: signed_auth_token,
-                        refresh_token: signed_ref_token,
-                    })
-                    .unwrap(),
-                )
-            } else {
-                // Might be a rewind attack, invalidate family
-                RefreshToken::invalidate_all_for_family(token.family)
-                    .await
-                    .map_err(ApiResponse::InternalServerErrorWithMessage)
-                    .unwrap();
-                ApiResponse::Unauthorized
+                    ApiResponse::Success(
+                        serde_json::to_value(AuthResponse {
+                            auth_token: signed_auth_token,
+                            refresh_token: signed_ref_token,
+                        })
+                        .unwrap(),
+                    )
+                } else {
+                    // Might be a rewind attack, invalidate family
+                    RefreshToken::invalidate_all_for_family(token.family)
+                        .await
+                        .map_err(ApiResponse::InternalServerErrorWithMessage)
+                        .unwrap();
+                    ApiResponse::Unauthorized
+                }
             }
+            Ok(None) => ApiResponse::Unauthorized,
+            Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
-        Ok(None) => ApiResponse::Unauthorized,
-        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+    } else {
+        ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not parse token."))
     }
 }
 
