@@ -167,7 +167,6 @@ impl RefreshToken {
         obj += &format!("{:?}", self.version);
 
         let mut hasher = Sha256::new();
-        println!("{}", &obj);
         hasher.update(obj);
         let result = hasher.finalize();
         String::from_utf8_lossy(&result[..]).to_string()
@@ -267,13 +266,13 @@ impl fmt::Display for Scope {
 
 impl Scope {
     pub fn check_scopes(scopes: &Scopes, target: &Scope) -> bool {
+        if scopes.contains(&Scope::Invalid) {
+            return false;
+        }
         scopes.contains(target)
     }
 
     pub async fn check_user_app_relationship(user_id: Uuid, app_id: Uuid) -> Result<Vec<Self>> {
-        if app_id == MASTER_APP_ID.to_owned() {
-            return Ok(Scope::all());
-        }
         match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
             "user_id",
             &user_id.to_string(),
@@ -282,7 +281,6 @@ impl Scope {
         {
             Ok(recs) => {
                 for r in recs {
-                    println!("Checking {}", r.app_id);
                     if r.app_id == app_id {
                         return Ok(r.scopes);
                     }
@@ -294,7 +292,7 @@ impl Scope {
     }
 
     pub fn all() -> Vec<Scope> {
-        Self::iter().collect()
+        Self::iter().filter(|t| t != &Scope::Invalid).collect()
     }
 
     pub async fn get_scopes_from_token(token_str: &str) -> Result<Scopes> {

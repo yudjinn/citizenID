@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use anyhow::Result;
+use aws_sdk_dynamodb::types::error::ConditionalCheckFailedException;
 use axum::body::Body;
 use axum::http::Request;
 use axum::middleware::{self, Next};
@@ -69,6 +70,9 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                         }
                         match Scope::check_user_app_relationship(user.id, app.id).await {
                             Ok(scopes) => {
+                                if !Scope::check_scopes(&scopes, &Scope::GetUserFull) {
+                                    return ApiResponse::Unauthorized;
+                                }
                                 if let Ok(v) = check_hash(
                                     &entered_password,
                                     user.salt.as_ref().unwrap(),
@@ -174,6 +178,9 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             match Scope::check_user_app_relationship(user.id, app.id).await {
                 Ok(scopes) => {
                     // user exists, login
+                    if !Scope::check_scopes(&scopes, &Scope::GetUserFull) {
+                        return ApiResponse::Unauthorized;
+                    }
                     let (r, a) = generate_token_pair(user.id, token.app_id, None, scopes)
                         .await
                         .map_err(ApiResponse::InternalServerErrorWithMessage)
