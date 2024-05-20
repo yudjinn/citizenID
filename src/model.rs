@@ -161,10 +161,11 @@ impl RefreshToken {
             obj += &format!("SCOPE.{}", s);
         }
         obj += &self.valid.to_string();
-        obj += &self.exp.to_string();
+        obj += &self.exp.format("%Y-%m-%d %H:%M:%S").to_string();
         obj += &format!("{:?}", self.version);
 
         let mut hasher = Sha256::new();
+        println!("{}", &obj);
         hasher.update(obj);
         let result = hasher.finalize();
         String::from_utf8_lossy(&result[..]).to_string()

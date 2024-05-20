@@ -309,7 +309,7 @@ async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>)
             }
         }
         Ok(None) => ApiResponse::Unauthorized,
-        Err(_) => ApiResponse::InternalServerError,
+        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
     }
 }
 
