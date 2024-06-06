@@ -15,6 +15,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::model::DiscordUserResponse;
+use crate::model::UserStatus;
 use crate::model::{
     Application, ApprovedApplication, DiscordTokenLogin, LoginUser, RefreshToken, RefreshTokenDB,
     RefreshTokenRequest, Scope, Scopes, User,
@@ -64,6 +65,9 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                     .await
                 {
                     Ok(Some(user)) => {
+                        if user.status == UserStatus::Inactive {
+                            return ApiResponse::NotFound;
+                        }
                         // if the user doesnt have a password set
                         if user.hashed_password.is_none() || user.salt.is_none() {
                             return ApiResponse::Unauthorized;
@@ -175,6 +179,9 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             db_handler::get_item_from_table_with_filter_by_index::<User>("discord_sf", &snowflake)
                 .await
         {
+            if user.status == UserStatus::Inactive {
+                return ApiResponse::NotFound;
+            }
             match Scope::check_user_app_relationship(user.id, app.id).await {
                 Ok(scopes) => {
                     // user exists, login
