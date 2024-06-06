@@ -23,6 +23,7 @@ use super::login::auth_middleware;
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(init_authorization))
+        .route("/preflight", get(preflight))
         .route("/authorize", post(approve_authorization))
         .layer(middleware::from_fn(auth_middleware))
         .route("/test", get(test_oauth))
@@ -60,6 +61,40 @@ async fn test_oauth(
             "Could not associate user with application."
         )),
     }
+}
+
+pub async fn preflight(
+    app_id: Query<Uuid>,
+    redirect_uri: Option<Query<String>>,
+    state: Query<String>,
+    scopes: Query<String>,
+    Extension(_current_user): Extension<User>,
+) -> ApiResponse {
+    let mut reasons: Vec<String> = vec![];
+    if let Some(app) =
+        db_handler::get_item_from_table_with_filter_by_id::<Application>(&app_id.to_string())
+            .await
+            .unwrap()
+    {
+        if redirect_uri.is_some() && !app.callback_uris.contains(&redirect_uri.unwrap().0) {
+            reasons.push("Invalid redirect URI: Not in contained in application spec.".into());
+        }
+        if state.is_empty() {
+            reasons.push("Please provide a valid state string.".into());
+        }
+        for s in scopes.split('+').map(|t| t.to_owned()) {
+            let b: Scope = s.clone().into();
+            if b == Scope::Invalid {
+                reasons.push(format!("Scope '{}' is invalid.", s));
+            }
+        }
+    } else {
+        reasons.push("App ID Invalid".into());
+    }
+    if reasons.len() > 0 {
+        return ApiResponse::MissingData(json!(reasons));
+    }
+    return ApiResponse::Success(json!("No issues deteced."));
 }
 
 pub async fn init_authorization(

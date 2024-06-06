@@ -126,6 +126,16 @@ POST "/user" : {
 
 ## OAuth
 ```
+🔒 GET "/oauth/preflight?app_id&state&scopes&redirect_url" : {
+	app_id: Uuid,
+	state: code that is returned,
+	scopes: '+' delimited list of scopes,
+	redirect_uri: must exist in app's allowed uris
+} => 
+{
+  Preflight check of vars that returns json message for what was invalid.
+}
+
 🔒 GET "/oauth?app_id&state&scopes&redirect_url" : {
 	app_id: Uuid,
 	state: code that is returned,
