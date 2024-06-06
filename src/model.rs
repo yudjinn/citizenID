@@ -15,8 +15,8 @@ use strum_macros::EnumIter;
 use uuid::Uuid;
 
 use crate::utils::ApiResponse;
+use crate::KEYS;
 use crate::{db_handler, utils::hash_password};
-use crate::{KEYS, MASTER_APP_ID};
 
 pub trait Model {
     const TABLE: &'static str;

@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use aws_sdk_dynamodb::types::error::ConditionalCheckFailedException;
 use axum::body::Body;
 use axum::http::Request;
 use axum::middleware::{self, Next};

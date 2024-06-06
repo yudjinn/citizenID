@@ -236,9 +236,12 @@ async fn link_rsi_account(
         return ApiResponse::MissingData(json!("Account name not specified."));
     }
 
-    if !db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
+    if db_handler::get_all_from_table_with_filter_by_index::<User>("rsi_id", &rsi_account_name)
         .await
         .unwrap()
+        .iter()
+        .filter(|t| t.status != UserStatus::Inactive)
+        .collect::<Vec<&User>>()
         .is_empty()
     {
         return ApiResponse::ResourceExists;

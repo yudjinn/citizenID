@@ -128,14 +128,16 @@ where
             format!(":{}", column_name),
             AttributeValue::S(value.to_owned()),
         );
-    let result = req.send().await?;
 
-    match result.items {
-        Some(items) => {
+    if let Ok(result) = req.send().await {
+        if let Some(items) = result.items {
             let t: Vec<T> = from_items(items)?;
-            Ok(t)
+            return Ok(t.clone());
+        } else {
+            return Ok(Vec::new());
         }
-        None => Ok(Vec::new()),
+    } else {
+        return Ok(Vec::new());
     }
 }
 
