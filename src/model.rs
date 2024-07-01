@@ -1,7 +1,7 @@
 use core::fmt;
 use std::ops::Add;
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
@@ -538,15 +538,20 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn new_from_template(template: &CreateApplication, user_id: Uuid) -> Self {
-        Self {
+    pub async fn new_from_template(template: &CreateApplication, user_id: Uuid) -> Result<Self> {
+        for uri in &template.callback_uris {
+            if uri.parse::<http::Uri>().is_err() {
+                return Err(anyhow!("Invalid uri: {}", &uri));
+            }
+        }
+        Ok(Self {
             id: Uuid::new_v4(),
             name: template.name.clone(),
             user_id,
             secret: Uuid::new_v4().to_string(),
             callback_uris: template.callback_uris.clone(),
             status: AppStatus::Active,
-        }
+        })
     }
 
     pub async fn from_request(value: ApplicationRequest) -> Result<Self> {

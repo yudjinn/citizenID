@@ -140,7 +140,7 @@ async fn logout_user(req: Request<Body>) -> ApiResponse {
 
     let mut refresh_token = RefreshToken::from_header_str(refresh_header)
         .await
-        .map_err(ApiResponse::InternalServerErrorWithMessage)
+        .map_err(|_| ApiResponse::Success(json!("Invalid token, nothing to do.")))
         .unwrap();
 
     // nuke the token

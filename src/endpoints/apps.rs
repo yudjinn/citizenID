@@ -57,10 +57,12 @@ async fn create_app(
     Extension(current_user): Extension<User>,
     extract::Json(app): extract::Json<CreateApplication>,
 ) -> ApiResponse {
-    let new = Application::new_from_template(&app, current_user.id).await;
-    match db_handler::put_item::<Application>(new).await {
-        Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
-        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+    match Application::new_from_template(&app, current_user.id).await {
+        Ok(new) => match db_handler::put_item::<Application>(new).await {
+            Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
+            Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+        },
+        Err(e) => ApiResponse::MissingData(json!(e.to_string())),
     }
 }
 
@@ -79,6 +81,14 @@ async fn update_callbacks(
             return ApiResponse::Unauthorized;
         }
         if update.callback_uris.is_some() {
+            for uri in update.callback_uris.as_ref().unwrap() {
+                if uri.parse::<http::Uri>().is_err() {
+                    return ApiResponse::MissingData(json!(format!(
+                        "Uri \"{}\" is malformed.",
+                        &uri
+                    )));
+                }
+            }
             app.callback_uris = update.callback_uris.unwrap();
         }
         if update.status.is_some() {
