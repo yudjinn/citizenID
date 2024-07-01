@@ -30,7 +30,7 @@ pub enum TokenVersion {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ApprovedApplication {
-    pub id: Uuid,
+    pub id: String,
     pub user_id: Uuid,
     pub app_id: Uuid,
     pub app_name: String,
@@ -629,6 +629,14 @@ pub struct AuthReview {
     pub scopes: Scopes,
     pub redirect_uri: String,
     pub state: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct OauthParams {
+    pub app_id: Uuid,
+    pub redirect_uri: Option<String>,
+    pub state: String,
+    pub scopes: String,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

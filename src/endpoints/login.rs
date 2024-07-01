@@ -11,7 +11,7 @@ use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use uuid::Uuid;
+use sha2::{Digest, Sha256};
 
 use crate::model::DiscordUserResponse;
 use crate::model::UserStatus;
@@ -212,8 +212,12 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             // user doesnt exist, create
             let u = User::new_from_discord(&snowflake).await;
             if let Ok(user) = db_handler::put_item::<User>(u).await {
+                let mut hasher = Sha256::new();
+                hasher.update(format!("{}{}", user.id, MASTER_APP_ID.to_owned()));
+                let result = hasher.finalize();
+                let id = String::from_utf8_lossy(&result[..]).to_string();
                 let aa = ApprovedApplication {
-                    id: Uuid::new_v4(),
+                    id,
                     user_id: user.id,
                     app_id: MASTER_APP_ID.to_owned(),
                     app_name: "CORVUS".into(),

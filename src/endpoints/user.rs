@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use uuid::Uuid;
+use sha2::{Digest, Sha256};
 
 use crate::{
     db_handler,
@@ -106,8 +106,12 @@ async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
             match User::new_from_email(&user.email, &user.password).await {
                 Ok(new) => match db_handler::put_item::<User>(new).await {
                     Ok(u) => {
+                        let mut hasher = Sha256::new();
+                        hasher.update(format!("{}{}", u.id, MASTER_APP_ID.to_owned()));
+                        let result = hasher.finalize();
+                        let id = String::from_utf8_lossy(&result[..]).to_string();
                         let aa = ApprovedApplication {
-                            id: Uuid::new_v4(),
+                            id,
                             user_id: u.id,
                             app_id: MASTER_APP_ID.to_owned(),
                             app_name: "CORVUS".into(),

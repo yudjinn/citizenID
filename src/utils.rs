@@ -73,7 +73,7 @@ pub enum ApiResponse {
 impl From<ApiResponse> for u16 {
     fn from(val: ApiResponse) -> Self {
         match val {
-            ApiResponse::Unauthorized => 403,
+            ApiResponse::Unauthorized => 401,
             ApiResponse::NotFound => 404,
             ApiResponse::MissingData(_) => 400,
             ApiResponse::InternalServerError => 500,
