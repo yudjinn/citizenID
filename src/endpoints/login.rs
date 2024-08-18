@@ -328,7 +328,7 @@ async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>)
             Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
     } else {
-        ApiResponse::InternalServerErrorWithMessage(anyhow!("Could not parse token."))
+        ApiResponse::Unauthorized
     }
 }
 
