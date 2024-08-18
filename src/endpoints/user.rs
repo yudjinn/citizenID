@@ -149,8 +149,14 @@ async fn update_user(
             Ok(Some(mut obj)) => {
                 let mut invalidate = false;
                 if let Some(e) = update.email.clone() {
-                    obj.email = Some(e);
+                    obj.email = Some(e.clone());
                     invalidate = true;
+                    if let Ok(Some(_)) =
+                        db_handler::get_item_from_table_with_filter_by_index::<User>("email", &e)
+                            .await
+                    {
+                        return ApiResponse::ResourceExists;
+                    }
                 }
                 if let Some(p) = update.password.clone() {
                     match hash_password(&p).await {
