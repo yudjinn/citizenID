@@ -183,7 +183,6 @@ pub async fn approve_authorization(
                         Some("PKCS7"),
                     )
                     .map_err(|_| ApiResponse::InternalServerError)?;
-                    println!("{}", &app.secret);
                     let tok = base64::prelude::BASE64_STANDARD.encode(&tok);
                     let tok = urlencoding::encode(&tok);
                     return Ok(Redirect::temporary(&format!(
