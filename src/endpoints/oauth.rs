@@ -65,9 +65,14 @@ async fn test_oauth(
 }
 
 pub async fn preflight(
-    params: Query<OauthParams>,
+    params: Option<Query<OauthParams>>,
     Extension(_current_user): Extension<User>,
 ) -> ApiResponse {
+    let params = if params.is_none() {
+        return ApiResponse::MissingData(json!("Missing query parameters."));
+    } else {
+        params.unwrap()
+    };
     let mut reasons: Vec<String> = vec![];
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
@@ -100,9 +105,14 @@ pub async fn preflight(
 }
 
 pub async fn init_authorization(
-    params: Query<OauthParams>,
+    params: Option<Query<OauthParams>>,
     Extension(current_user): Extension<User>,
 ) -> ApiResponse {
+    let params = if params.is_none() {
+        return ApiResponse::MissingData(json!("Missing query parameters."));
+    } else {
+        params.unwrap()
+    };
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
     )
