@@ -7,6 +7,7 @@ use axum::{
     Extension, Json, Router,
 };
 
+use base64ct::{Base64, Encoding};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -36,7 +37,7 @@ async fn test_oauth(
     let mut hasher = Sha256::new();
     hasher.update(format!("{}{}", auth.user_id, auth.app_id));
     let result = hasher.finalize();
-    let id = String::from_utf8_lossy(&result[..]).to_string();
+    let id = Base64::encode_string(&result);
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,
@@ -117,7 +118,7 @@ pub async fn init_authorization(
                 if app.callback_uris.contains(&parsed) {
                     parsed.clone()
                 } else {
-                    app.callback_uris.first().unwrap().clone()
+                    return ApiResponse::MissingData(json!("Invalid URI."));
                 }
             }
             None => app.callback_uris.first().unwrap().clone(),
@@ -151,7 +152,7 @@ pub async fn approve_authorization(
     let mut hasher = Sha256::new();
     hasher.update(format!("{}{}", auth.user_id, auth.app_id));
     let result = hasher.finalize();
-    let id = String::from_utf8_lossy(&result[..]).to_string();
+    let id = Base64::encode_string(&result);
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,

@@ -7,6 +7,8 @@ use axum::response::Response;
 use axum::routing::{delete, post};
 use axum::{extract, Json};
 use axum::{Extension, Router};
+use base64ct::Base64;
+use base64ct::Encoding;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
@@ -58,7 +60,7 @@ async fn login_with_oauth(extract::Json(login): extract::Json<LoginOauth>) -> Ap
         let mut hasher = Sha256::new();
         hasher.update(login.secret);
         let result = hasher.finalize();
-        let sec_hash = String::from_utf8_lossy(&result[..]).to_string();
+        let sec_hash = Base64::encode_string(&result);
         if sec_hash != app.secret {
             return ApiResponse::Unauthorized;
         }
@@ -275,7 +277,7 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
                 let mut hasher = Sha256::new();
                 hasher.update(format!("{}{}", user.id, MASTER_APP_ID.to_owned()));
                 let result = hasher.finalize();
-                let id = String::from_utf8_lossy(&result[..]).to_string();
+                let id = Base64::encode_string(&result);
                 let aa = ApprovedApplication {
                     id,
                     user_id: user.id,

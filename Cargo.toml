@@ -21,6 +21,7 @@ aws-config = "0.56.1"
 aws-sdk-dynamodb = { version = "0.33.0", features = ["rt-tokio"] }
 axum = { version = "0.7.4", features = [ "macros", "multipart"] }
 axum-extra = { version = "0.9.2", features = ["cookie", "cookie-key-expansion", "typed-header"] }
+base64ct = "1.6.0"
 chrono = { version = "0.4.34", features = ["serde"] }
 color-eyre = "0.6.2"
 hmac = { version = "0.12.1", features = ["std"] }

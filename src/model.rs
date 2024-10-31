@@ -3,6 +3,7 @@ use std::ops::Add;
 
 use anyhow::{anyhow, Error, Result};
 
+use base64ct::{Base64, Encoding};
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
@@ -171,7 +172,7 @@ impl RefreshToken {
         let mut hasher = Sha256::new();
         hasher.update(obj);
         let result = hasher.finalize();
-        String::from_utf8_lossy(&result[..]).to_string()
+        Base64::encode_string(&result)
     }
 
     pub async fn default(user_id: Uuid, scopes: Vec<Scope>, app_id: Uuid) -> Result<Self> {
@@ -423,7 +424,7 @@ impl User {
         hasher.update(id.as_fields().1.to_string());
         hasher.update(id.as_fields().2.to_string());
         let result = hasher.finalize();
-        let mut s = format!("{:X}", &result);
+        let mut s = Base64::encode_string(&result);
         s = s[..10].to_string();
         format!("[corvus::{}]", &s)
     }
@@ -561,7 +562,7 @@ impl From<Application> for ApplicationDB {
         let mut hasher = Sha256::new();
         hasher.update(value.secret);
         let result = hasher.finalize();
-        let sec_hash = String::from_utf8_lossy(&result[..]).to_string();
+        let sec_hash = Base64::encode_string(&result);
 
         ApplicationDB {
             id: value.id,

@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Extension, Json, Router,
 };
+use base64ct::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -109,7 +110,7 @@ async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
                         let mut hasher = Sha256::new();
                         hasher.update(format!("{}{}", u.id, MASTER_APP_ID.to_owned()));
                         let result = hasher.finalize();
-                        let id = String::from_utf8_lossy(&result[..]).to_string();
+                        let id = Base64::encode_string(&result);
                         let aa = ApprovedApplication {
                             id,
                             user_id: u.id,
