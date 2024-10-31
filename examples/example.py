@@ -35,22 +35,8 @@ approve_url = 'https://api-staging.citizen-id.space/oauth/authorize'
 post_headers = headers.update({'Content-Type': 'application/json'})
 approve_response = requests.post(approve_url, headers=headers, json=auth_payload)
 
-from urllib.parse import unquote
-import base64
-token = unquote(approve_response.url.split("token=")[1])
-token_dec = base64.b64decode(token)
+# TODO:
+# grab code from payload
+# use code, app_id, and app_secret to get login token
+login_url = 'https://api-staging.citizen-id.space/login/oauth'
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding
-
-cipher = Cipher(algorithms.AES(secret.encode('utf-8')[:32]), modes.ECB())
-decryptor = cipher.decryptor()
-decrypted_data = decryptor.update(token_dec) + decryptor.finalize()
-
-unpadder = padding.PKCS7(128).unpadder()
-plaintext = unpadder.update(decrypted_data) + unpadder.finalize()
-
-token_url = 'https://api-staging.citizen-id.space/login/token'
-token_payload = json.loads(f'"refresh_token": "{plaintext}", "app_id": "{client_id}"')
-response = requests.post(token_url, data=token_payload)
-z
