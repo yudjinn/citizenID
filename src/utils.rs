@@ -95,7 +95,7 @@ impl IntoResponse for ApiResponse {
     fn into_response(self) -> axum::response::Response {
         let (status, payload) = match self {
             ApiResponse::Unauthorized => (StatusCode::UNAUTHORIZED, json!("Unauthorized.")),
-            ApiResponse::MissingData(ref val) => (StatusCode::PARTIAL_CONTENT, val.clone()),
+            ApiResponse::MissingData(ref val) => (StatusCode::UNPROCESSABLE_ENTITY, val.clone()),
             ApiResponse::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 json!("Something happened."),

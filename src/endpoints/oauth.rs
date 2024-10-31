@@ -103,11 +103,6 @@ pub async fn init_authorization(
     params: Query<OauthParams>,
     Extension(current_user): Extension<User>,
 ) -> ApiResponse {
-    // flow:
-    // hit `authorize` with appid, etc, returns a token and a view of the app/scopes you're allowing
-    // hit the continue endpoint with token acts as "acceptance" returns a redirect to the redirect_uri with the token and state
-    // this registers the token to the user with the provided scopes. Maybe I add a token app source as an option uuid?
-    // the app then has the ability to make requests using that token and can follow the normal auth flow with exchanging it for an auth token
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
     )
@@ -130,7 +125,6 @@ pub async fn init_authorization(
             .map(|t| t.to_owned().into())
             .collect();
         let st = params.state.to_string();
-        // Return jwt of the userid, app_id, callback, state, and scopes as a "code"
         let review = AuthReview {
             app_id: app.id,
             app_name: app.name,
