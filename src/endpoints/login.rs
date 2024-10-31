@@ -52,10 +52,8 @@ async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiR
 }
 async fn login_with_oauth(extract::Json(login): extract::Json<LoginOauth>) -> ApiResponse {
     // make sure the secret matches the app
-    if let Some(app) =
-        db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&login.app_id)
-            .await
-            .unwrap()
+    if let Ok(Some(app)) =
+        db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&login.app_id).await
     {
         let mut hasher = Sha256::new();
         hasher.update(login.secret);
@@ -66,10 +64,8 @@ async fn login_with_oauth(extract::Json(login): extract::Json<LoginOauth>) -> Ap
         }
 
         // make sure the code matches the app
-        if let Some(auth_success) =
-            db_handler::get_item_from_table_with_filter_by_id::<AuthSuccessDB>(&login.code)
-                .await
-                .unwrap()
+        if let Ok(Some(auth_success)) =
+            db_handler::get_item_from_table_with_filter_by_id::<AuthSuccessDB>(&login.code).await
         {
             if auth_success.app_id != app.id.to_string() {
                 return ApiResponse::Unauthorized;

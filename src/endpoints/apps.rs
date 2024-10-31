@@ -76,11 +76,10 @@ async fn update_callbacks(
     Path(id): Path<Uuid>,
     extract::Json(update): extract::Json<UpdateApplication>,
 ) -> ApiResponse {
-    if let Some(mut app) =
+    if let Ok(Some(mut app)) =
         db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&id.to_string())
             .await
             .map_err(|_| ApiResponse::NotFound)
-            .unwrap()
     {
         if app.user_id != current_user.id {
             return ApiResponse::Unauthorized;

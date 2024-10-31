@@ -68,11 +68,10 @@ pub async fn preflight(
     Extension(_current_user): Extension<User>,
 ) -> ApiResponse {
     let mut reasons: Vec<String> = vec![];
-    if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+    if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
     )
     .await
-    .unwrap()
     {
         if params.redirect_uri.is_some()
             && !app
@@ -108,11 +107,10 @@ pub async fn init_authorization(
     // hit the continue endpoint with token acts as "acceptance" returns a redirect to the redirect_uri with the token and state
     // this registers the token to the user with the provided scopes. Maybe I add a token app source as an option uuid?
     // the app then has the ability to make requests using that token and can follow the normal auth flow with exchanging it for an auth token
-    if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+    if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
     )
     .await
-    .unwrap()
     {
         let ri = match params.redirect_uri.as_ref() {
             Some(parsed) => {
