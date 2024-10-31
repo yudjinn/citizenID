@@ -97,7 +97,7 @@ pub async fn init_authorization(
                 sc.push(b);
             }
         }
-        let st = params.state.to_string();
+        let st = params.state.clone();
         let review = AuthReview {
             app_id: app.id,
             app_name: app.name,

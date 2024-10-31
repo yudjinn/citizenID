@@ -115,11 +115,6 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
             ..
         } => {
             // TODO: pull this into a middleware
-            if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-                &login.app_id.to_string(),
-            )
-            .await
-            .unwrap()
             {
                 match db_handler::get_item_from_table_with_filter_by_index::<User>("email", &email)
                     .await
@@ -132,55 +127,47 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                         if user.hashed_password.is_none() || user.salt.is_none() {
                             return ApiResponse::Unauthorized;
                         }
-                        match Scope::check_user_app_relationship(user.id, app.id).await {
-                            Ok(scopes) => {
-                                if !Scope::check_scopes(&scopes, &Scope::GetUserFull) {
-                                    return ApiResponse::Unauthorized;
-                                }
-                                if let Ok(v) = check_hash(
-                                    &entered_password,
-                                    user.salt.as_ref().unwrap(),
-                                    user.hashed_password.as_ref().unwrap(),
-                                ) {
-                                    if v {
-                                        let (r, a) =
-                                            generate_token_pair(user.id, app.id, None, scopes)
-                                                .await
-                                                .map_err(
-                                                    ApiResponse::InternalServerErrorWithMessage,
-                                                )
-                                                .unwrap();
-                                        let signed_ref_token =
-                                            encode(&Header::default(), &r, &KEYS.encoding)
-                                                .map_err(|_| ApiResponse::InternalServerError)
-                                                .unwrap();
-                                        let signed_auth_token =
-                                            encode(&Header::default(), &a, &KEYS.encoding)
-                                                .map_err(|_| ApiResponse::InternalServerError)
-                                                .unwrap();
+                        if let Ok(v) = check_hash(
+                            &entered_password,
+                            user.salt.as_ref().unwrap(),
+                            user.hashed_password.as_ref().unwrap(),
+                        ) {
+                            if v {
+                                let (r, a) = generate_token_pair(
+                                    user.id,
+                                    Uuid::parse_str(&MASTER_APP_ID.to_string()).unwrap(),
+                                    None,
+                                    vec![Scope::Full],
+                                )
+                                .await
+                                .map_err(ApiResponse::InternalServerErrorWithMessage)
+                                .unwrap();
+                                let signed_ref_token =
+                                    encode(&Header::default(), &r, &KEYS.encoding)
+                                        .map_err(|_| ApiResponse::InternalServerError)
+                                        .unwrap();
+                                let signed_auth_token =
+                                    encode(&Header::default(), &a, &KEYS.encoding)
+                                        .map_err(|_| ApiResponse::InternalServerError)
+                                        .unwrap();
 
-                                        ApiResponse::Success(
-                                            serde_json::to_value(AuthResponse {
-                                                auth_token: signed_auth_token,
-                                                refresh_token: signed_ref_token,
-                                            })
-                                            .unwrap(),
-                                        )
-                                    } else {
-                                        ApiResponse::Unauthorized
-                                    }
-                                } else {
-                                    ApiResponse::InternalServerError
-                                }
+                                ApiResponse::Success(
+                                    serde_json::to_value(AuthResponse {
+                                        auth_token: signed_auth_token,
+                                        refresh_token: signed_ref_token,
+                                    })
+                                    .unwrap(),
+                                )
+                            } else {
+                                ApiResponse::Unauthorized
                             }
-                            _ => ApiResponse::Unauthorized,
+                        } else {
+                            ApiResponse::InternalServerError
                         }
                     }
                     Ok(None) => ApiResponse::Unauthorized,
                     Err(_) => ApiResponse::InternalServerError,
                 }
-            } else {
-                ApiResponse::NotFound
             }
         }
         _ => ApiResponse::MissingData(json!("Missing either email or password.")),
@@ -246,9 +233,6 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             match Scope::check_user_app_relationship(user.id, app.id).await {
                 Ok(scopes) => {
                     // user exists, login
-                    if !Scope::check_scopes(&scopes, &Scope::GetUserFull) {
-                        return ApiResponse::Unauthorized;
-                    }
                     let (r, a) = generate_token_pair(user.id, token.app_id, None, scopes)
                         .await
                         .map_err(ApiResponse::InternalServerErrorWithMessage)
@@ -325,7 +309,7 @@ async fn revoke_discord(
     Extension(mut current_user): Extension<User>,
     Extension(scopes): Extension<Scopes>,
 ) -> ApiResponse {
-    if !Scope::check_scopes(&scopes, &Scope::SetDiscordID) {
+    if !Scope::check_scopes(&scopes, &Scope::Full) {
         return ApiResponse::Unauthorized;
     }
     if let Some(_sf) = current_user.discord_sf {

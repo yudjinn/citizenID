@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 use crate::db_handler;
 use crate::model::{
-    Application, ApplicationDB, ApplicationResponse, CreateApplication, UpdateApplication, User,
+    Application, ApplicationDB, ApplicationResponse, CreateApplication, Scope, Scopes,
+    UpdateApplication, User,
 };
 use crate::utils::ApiResponse;
 
@@ -58,8 +59,12 @@ async fn get_app(Extension(current_user): Extension<User>, Path(id): Path<Uuid>)
 
 async fn create_app(
     Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
     extract::Json(app): extract::Json<CreateApplication>,
 ) -> ApiResponse {
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
     match Application::new_from_template(&app, current_user.id).await {
         Ok(new) => match db_handler::put_item::<ApplicationDB>(new.into()).await {
             Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
@@ -73,9 +78,13 @@ async fn create_app(
 
 async fn update_callbacks(
     Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
     Path(id): Path<Uuid>,
     extract::Json(update): extract::Json<UpdateApplication>,
 ) -> ApiResponse {
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
     if let Ok(Some(mut app)) =
         db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&id.to_string())
             .await
@@ -112,8 +121,12 @@ async fn update_callbacks(
 
 async fn delete_app(
     Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
     Path(app_id): Path<String>,
 ) -> ApiResponse {
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
     match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&app_id).await {
         Ok(Some(app)) => {
             if current_user.id != app.user_id {

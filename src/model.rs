@@ -228,25 +228,16 @@ pub type Scopes = Vec<Scope>;
 #[derive(Deserialize, Serialize, Clone, EnumIter, PartialEq, Eq, Debug)]
 pub enum Scope {
     Invalid,
-    GetUserID,
-    SetUser,
-    GetUserFull,
-    GetRSIID,
-    SetRSIID,
+    GetUser,
     GetDiscordID,
-    SetDiscordID,
+    Full,
 }
 
 impl From<String> for Scope {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
-            "get_user" => Self::GetUserID,
-            "get_user_full" => Self::GetUserID,
-            "update_user" => Self::SetUser,
+            "get_user" => Self::GetUser,
             "get_discord" => Self::GetDiscordID,
-            "set_discord" => Self::SetDiscordID,
-            "get_rsi" => Self::GetRSIID,
-            "set_rsi" => Self::SetRSIID,
             _ => Self::Invalid,
         }
     }
@@ -256,13 +247,9 @@ impl fmt::Display for Scope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Scope::Invalid => write!(f, "invalid"),
-            Scope::GetUserID => write!(f, "get_user"),
-            Scope::SetUser => write!(f, "set_user"),
-            Scope::GetUserFull => write!(f, "get_user_full"),
-            Scope::GetRSIID => write!(f, "get_rsi_id"),
-            Scope::SetRSIID => write!(f, "set_rsi_id"),
+            Scope::GetUser => write!(f, "get_user"),
             Scope::GetDiscordID => write!(f, "get_discord_id"),
-            Scope::SetDiscordID => write!(f, "set_discord_id"),
+            Scope::Full => write!(f, "full"),
         }
     }
 }
@@ -402,6 +389,18 @@ impl From<User> for UserResponse {
 }
 
 impl User {
+    pub fn scoped(&self, scopes: Vec<Scope>) -> Self {
+        let mut ret = self.clone();
+        if !scopes.contains(&Scope::Full) {
+            ret.email = None;
+            ret.hashed_password = None;
+            ret.discord_sf = None;
+        }
+        if scopes.contains(&Scope::GetDiscordID) {
+            ret.discord_sf = self.discord_sf.clone();
+        }
+        return self.clone();
+    }
     pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
         let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();
@@ -506,7 +505,6 @@ pub struct LoginUser {
     pub email: Option<String>,
     pub password: Option<String>,
     pub discord_sf: Option<String>,
-    pub app_id: Uuid,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -728,14 +726,14 @@ pub struct AuthReview {
     pub user_id: Uuid,
     pub scopes: Scopes,
     pub redirect_uri: String,
-    pub state: String,
+    pub state: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct OauthParams {
     pub app_id: Uuid,
     pub redirect_uri: Option<String>,
-    pub state: String,
+    pub state: Option<String>,
     pub scopes: String,
 }
 

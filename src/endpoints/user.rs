@@ -38,30 +38,24 @@ async fn get_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
 ) -> ApiResponse {
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::GetUserFull) {
-        // Regular login -> tokin with full scope
-        // Oauth -> just id/rsi_id/status?
-        match db_handler::get_item_from_table_with_filter_by_id::<User>(
-            &current_user.id.to_string(),
-        )
+    // Regular login -> tokin with full scope
+    // Oauth -> just id/rsi_id/status?
+    match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
         .await
-        {
-            Ok(Some(user)) => {
-                if user.status != UserStatus::Inactive && user.status != UserStatus::Unknown {
-                    let user_resp = user.clone();
+    {
+        Ok(Some(user)) => {
+            if user.status != UserStatus::Inactive && user.status != UserStatus::Unknown {
+                let user_resp = user.clone();
 
-                    ApiResponse::Success(
-                        serde_json::to_value(UserResponse::from(user_resp)).unwrap(),
-                    )
-                } else {
-                    ApiResponse::Unauthorized
-                }
+                ApiResponse::Success(
+                    serde_json::to_value(UserResponse::from(user_resp.scoped(_scopes))).unwrap(),
+                )
+            } else {
+                ApiResponse::Unauthorized
             }
-            Ok(None) => ApiResponse::NotFound,
-            Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
-    } else {
-        ApiResponse::Unauthorized
+        Ok(None) => ApiResponse::NotFound,
+        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
     }
 }
 
@@ -69,22 +63,27 @@ async fn delete_user(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
 ) -> ApiResponse {
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
-        let mut user = current_user.clone();
-        user.status = UserStatus::Inactive;
-        match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
-            Ok(_) => match RefreshToken::invalidate_all_for_user(current_user.id).await {
-                Ok(_) => ApiResponse::Success(json!("Success.")),
-                Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
-            },
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
+    let mut user = current_user.clone();
+    user.status = UserStatus::Inactive;
+    match db_handler::update_item::<User>(current_user.id.to_string(), user).await {
+        Ok(_) => match RefreshToken::invalidate_all_for_user(current_user.id).await {
+            Ok(_) => ApiResponse::Success(json!("Success.")),
             Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
-        }
-    } else {
-        ApiResponse::Unauthorized
+        },
+        Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
     }
 }
 
-async fn get_approved_applications(Extension(current_user): Extension<User>) -> ApiResponse {
+async fn get_approved_applications(
+    Extension(current_user): Extension<User>,
+    Extension(_scopes): Extension<Scopes>,
+) -> ApiResponse {
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
     match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
         "user_id",
         &current_user.id.to_string(),
@@ -138,68 +137,61 @@ async fn update_user(
     update: Json<UpdateUser>,
 ) -> ApiResponse {
     // check the item doesnt already exist
-    if Scope::check_scopes(&_scopes, &crate::model::Scope::SetUser) {
-        if let Err(r) = update.is_valid_payload().await {
-            return r;
-        }
-        match db_handler::get_item_from_table_with_filter_by_id::<User>(
-            &current_user.id.to_string(),
-        )
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
+    }
+    if let Err(r) = update.is_valid_payload().await {
+        return r;
+    }
+    match db_handler::get_item_from_table_with_filter_by_id::<User>(&current_user.id.to_string())
         .await
-        {
-            Ok(Some(mut obj)) => {
-                let mut invalidate = false;
-                if let Some(e) = update.email.clone() {
-                    obj.email = Some(e.clone());
-                    invalidate = true;
-                    if let Ok(Some(_)) =
-                        db_handler::get_item_from_table_with_filter_by_index::<User>("email", &e)
-                            .await
-                    {
-                        return ApiResponse::ResourceExists;
-                    }
-                }
-                if let Some(p) = update.password.clone() {
-                    match hash_password(&p).await {
-                        Ok((h, s)) => {
-                            obj.hashed_password = Some(h);
-                            obj.salt = Some(s);
-                            invalidate = true;
-                        }
-                        Err(e) => return ApiResponse::InternalServerErrorWithMessage(e),
-                    }
-                }
-                if invalidate {
-                    RefreshToken::invalidate_all_for_user(current_user.id)
-                        .await
-                        .map_err(ApiResponse::InternalServerErrorWithMessage)
-                        .unwrap();
-                }
-                match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
-                    Ok(u) => {
-                        ApiResponse::Success(serde_json::to_value(UserResponse::from(u)).unwrap())
-                    }
-                    Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+    {
+        Ok(Some(mut obj)) => {
+            let mut invalidate = false;
+            if let Some(e) = update.email.clone() {
+                obj.email = Some(e.clone());
+                invalidate = true;
+                if let Ok(Some(_)) =
+                    db_handler::get_item_from_table_with_filter_by_index::<User>("email", &e).await
+                {
+                    return ApiResponse::ResourceExists;
                 }
             }
-            Ok(None) => ApiResponse::NotFound,
-            Err(_) => ApiResponse::InternalServerError,
+            if let Some(p) = update.password.clone() {
+                match hash_password(&p).await {
+                    Ok((h, s)) => {
+                        obj.hashed_password = Some(h);
+                        obj.salt = Some(s);
+                        invalidate = true;
+                    }
+                    Err(e) => return ApiResponse::InternalServerErrorWithMessage(e),
+                }
+            }
+            if invalidate {
+                RefreshToken::invalidate_all_for_user(current_user.id)
+                    .await
+                    .map_err(ApiResponse::InternalServerErrorWithMessage)
+                    .unwrap();
+            }
+            match db_handler::update_item::<User>(current_user.id.to_string(), obj).await {
+                Ok(u) => ApiResponse::Success(serde_json::to_value(UserResponse::from(u)).unwrap()),
+                Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
+            }
         }
-    } else {
-        ApiResponse::Unauthorized
+        Ok(None) => ApiResponse::NotFound,
+        Err(_) => ApiResponse::InternalServerError,
     }
 }
 
 async fn begin_rsi_link(
     Extension(current_user): Extension<User>,
-    Extension(scopes): Extension<Scopes>,
+    Extension(_scopes): Extension<Scopes>,
 ) -> ApiResponse {
-    if Scope::check_scopes(&scopes, &Scope::SetRSIID) {
-        let ret: RSILinkUser = current_user.into();
-        ApiResponse::Success(serde_json::to_value(ret).unwrap())
-    } else {
-        ApiResponse::Unauthorized
+    if !Scope::check_scopes(&_scopes, &Scope::Full) {
+        return ApiResponse::Unauthorized;
     }
+    let ret: RSILinkUser = current_user.into();
+    ApiResponse::Success(serde_json::to_value(ret).unwrap())
 }
 
 #[allow(dead_code, non_snake_case)]
@@ -239,7 +231,7 @@ async fn link_rsi_account(
     Extension(scopes): Extension<Scopes>,
 ) -> ApiResponse {
     let rsi_account_name = query.account_name;
-    if !Scope::check_scopes(&scopes, &Scope::SetRSIID) {
+    if !Scope::check_scopes(&scopes, &Scope::Full) {
         return ApiResponse::Unauthorized;
     }
 
