@@ -3,18 +3,18 @@ use anyhow::anyhow;
 use axum::{
     extract::Query,
     middleware::{self},
-    response::Redirect,
     routing::{get, post},
     Extension, Json, Router,
 };
 
-use base64::Engine;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::{
     db_handler,
-    model::{Application, ApprovedApplication, AuthReview, OauthParams, Scope, User},
+    model::{
+        ApplicationDB, ApprovedApplication, AuthReview, AuthSuccess, OauthParams, Scope, User,
+    },
     utils::{generate_token_pair, ApiResponse},
 };
 
@@ -68,10 +68,11 @@ pub async fn preflight(
     Extension(_current_user): Extension<User>,
 ) -> ApiResponse {
     let mut reasons: Vec<String> = vec![];
-    if let Some(app) =
-        db_handler::get_item_from_table_with_filter_by_id::<Application>(&params.app_id.to_string())
-            .await
-            .unwrap()
+    if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+        &params.app_id.to_string(),
+    )
+    .await
+    .unwrap()
     {
         if params.redirect_uri.is_some()
             && !app
@@ -107,10 +108,11 @@ pub async fn init_authorization(
     // hit the continue endpoint with token acts as "acceptance" returns a redirect to the redirect_uri with the token and state
     // this registers the token to the user with the provided scopes. Maybe I add a token app source as an option uuid?
     // the app then has the ability to make requests using that token and can follow the normal auth flow with exchanging it for an auth token
-    if let Some(app) =
-        db_handler::get_item_from_table_with_filter_by_id::<Application>(&params.app_id.to_string())
-            .await
-            .unwrap()
+    if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+        &params.app_id.to_string(),
+    )
+    .await
+    .unwrap()
     {
         let ri = match params.redirect_uri.as_ref() {
             Some(parsed) => {
@@ -147,7 +149,7 @@ pub async fn init_authorization(
 pub async fn approve_authorization(
     Extension(current_user): Extension<User>,
     Json(auth): Json<AuthReview>,
-) -> Result<Redirect, ApiResponse> {
+) -> ApiResponse {
     let mut hasher = Sha256::new();
     hasher.update(format!("{}{}", auth.user_id, auth.app_id));
     let result = hasher.finalize();
@@ -161,40 +163,27 @@ pub async fn approve_authorization(
     };
     match db_handler::put_item::<ApprovedApplication>(aa).await {
         Ok(approved_app) => {
-            let (r, _) = generate_token_pair(
-                current_user.id,
-                approved_app.app_id,
-                None,
-                approved_app.scopes,
-            )
-            .await
-            .unwrap();
-            // Encrypt token
-            match db_handler::get_item_from_table_with_filter_by_id::<Application>(
+            match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
                 &approved_app.app_id.to_string(),
             )
             .await
             {
-                // redirect to endpoint
                 Ok(Some(app)) => {
-                    let tok = soft_aes::aes::aes_enc_ecb(
-                        r.id.as_bytes(),
-                        &app.secret.as_bytes()[..32],
-                        Some("PKCS7"),
-                    )
-                    .map_err(|_| ApiResponse::InternalServerError)?;
-                    let tok = base64::prelude::BASE64_STANDARD.encode(&tok);
-                    let tok = urlencoding::encode(&tok);
-                    return Ok(Redirect::temporary(&format!(
-                        "{}?token={}",
-                        auth.redirect_uri, tok
-                    )));
+                    if let Ok(succ) =
+                        AuthSuccess::new(current_user.id.to_string(), app.id.to_string()).await
+                    {
+                        return ApiResponse::Success(json!(succ));
+                    } else {
+                        return ApiResponse::InternalServerErrorWithMessage(anyhow!(
+                            "Could not associate user with application."
+                        ));
+                    }
                 }
-                _ => return Err(ApiResponse::InternalServerError),
+                _ => return ApiResponse::InternalServerError,
             }
         }
-        Err(_) => Err(ApiResponse::InternalServerErrorWithMessage(anyhow!(
+        Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!(
             "Could not associate user with application."
-        ))),
+        )),
     }
 }

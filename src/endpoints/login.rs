@@ -12,11 +12,15 @@ use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
+use crate::model::ApplicationDB;
+use crate::model::AuthSuccessDB;
 use crate::model::DiscordUserResponse;
+use crate::model::LoginOauth;
 use crate::model::UserStatus;
 use crate::model::{
-    Application, ApprovedApplication, DiscordTokenLogin, LoginUser, RefreshToken, RefreshTokenDB,
+    ApprovedApplication, DiscordTokenLogin, LoginUser, RefreshToken, RefreshTokenDB,
     RefreshTokenRequest, Scope, Scopes, User,
 };
 use crate::utils::{generate_token_pair, ApiResponse};
@@ -34,6 +38,7 @@ pub fn get_router() -> Router {
         .route("/logout_all", post(invalidate_all_tokens))
         .layer(middleware::from_fn(auth_middleware))
         .route("/login/email", post(login_with_email))
+        .route("/login/oauth", post(login_with_oauth))
         .route("/login/token", post(get_new_token))
         .route("/login/discord", post(login_with_discord))
         .route("/login/discord", delete(revoke_discord))
@@ -45,6 +50,64 @@ async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiR
         _ => ApiResponse::InternalServerError,
     }
 }
+async fn login_with_oauth(extract::Json(login): extract::Json<LoginOauth>) -> ApiResponse {
+    // make sure the secret matches the app
+    if let Some(app) =
+        db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&login.app_id)
+            .await
+            .unwrap()
+    {
+        let mut hasher = Sha256::new();
+        hasher.update(login.secret);
+        let result = hasher.finalize();
+        let sec_hash = String::from_utf8_lossy(&result[..]).to_string();
+        if sec_hash != app.secret {
+            return ApiResponse::Unauthorized;
+        }
+
+        // make sure the code matches the app
+        if let Some(auth_success) =
+            db_handler::get_item_from_table_with_filter_by_id::<AuthSuccessDB>(&login.code)
+                .await
+                .unwrap()
+        {
+            if auth_success.app_id != app.id.to_string() {
+                return ApiResponse::Unauthorized;
+            }
+
+            // remove the code
+            if db_handler::delete_item::<AuthSuccessDB>(auth_success.id.clone())
+                .await
+                .is_ok()
+            {
+                // return the token login info
+                if let Ok(uid) = Uuid::parse_str(&auth_success.user_id) {
+                    if let Ok(scopes) = Scope::check_user_app_relationship(uid, app.id).await {
+                        let (r, a) = generate_token_pair(uid, app.id, None, scopes)
+                            .await
+                            .map_err(ApiResponse::InternalServerErrorWithMessage)
+                            .unwrap();
+                        let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
+                            .map_err(|_| ApiResponse::InternalServerError)
+                            .unwrap();
+                        let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                            .map_err(|_| ApiResponse::InternalServerError)
+                            .unwrap();
+
+                        return ApiResponse::Success(
+                            serde_json::to_value(AuthResponse {
+                                auth_token: signed_auth_token,
+                                refresh_token: signed_ref_token,
+                            })
+                            .unwrap(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    ApiResponse::Unauthorized
+}
 
 async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> ApiResponse {
     match login {
@@ -54,7 +117,7 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
             ..
         } => {
             // TODO: pull this into a middleware
-            if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<Application>(
+            if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
                 &login.app_id.to_string(),
             )
             .await
@@ -169,10 +232,11 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
 
     let snowflake = discord_response.id;
 
-    if let Some(app) =
-        db_handler::get_item_from_table_with_filter_by_id::<Application>(&token.app_id.to_string())
-            .await
-            .unwrap()
+    if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+        &token.app_id.to_string(),
+    )
+    .await
+    .unwrap()
     {
         if let Ok(Some(user)) =
             db_handler::get_item_from_table_with_filter_by_index::<User>("discord_sf", &snowflake)

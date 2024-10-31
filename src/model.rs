@@ -6,6 +6,7 @@ use anyhow::{anyhow, Error, Result};
 use chrono::serde::ts_seconds;
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{decode, Validation};
+use rand::{distributions::Alphanumeric, Rng};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -20,6 +21,7 @@ use crate::{db_handler, utils::hash_password};
 
 pub trait Model {
     const TABLE: &'static str;
+    //TODO: make to/from db functions to get rid of model bloat
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -492,6 +494,13 @@ impl UpdateUser {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct LoginOauth {
+    pub code: String,
+    pub app_id: String,
+    pub secret: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LoginUser {
     pub email: Option<String>,
     pub password: Option<String>,
@@ -537,6 +546,47 @@ pub struct Application {
     pub status: AppStatus,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ApplicationDB {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub secret: String,
+    pub callback_uris: Vec<String>,
+    pub status: AppStatus,
+}
+
+impl From<Application> for ApplicationDB {
+    fn from(value: Application) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(value.secret);
+        let result = hasher.finalize();
+        let sec_hash = String::from_utf8_lossy(&result[..]).to_string();
+
+        ApplicationDB {
+            id: value.id,
+            user_id: value.user_id,
+            name: value.name,
+            secret: sec_hash,
+            callback_uris: value.callback_uris,
+            status: value.status,
+        }
+    }
+}
+
+impl Into<Application> for ApplicationDB {
+    fn into(self) -> Application {
+        Application {
+            id: self.id,
+            user_id: self.user_id,
+            name: self.name,
+            secret: self.secret,
+            callback_uris: self.callback_uris,
+            status: self.status,
+        }
+    }
+}
+
 impl Application {
     pub async fn new_from_template(template: &CreateApplication, user_id: Uuid) -> Result<Self> {
         for uri in &template.callback_uris {
@@ -555,11 +605,14 @@ impl Application {
     }
 
     pub async fn from_request(value: ApplicationRequest) -> Result<Self> {
-        match db_handler::get_item_from_table_with_filter_by_id::<Self>(&value.id.to_string()).await
+        match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+            &value.id.to_string(),
+        )
+        .await
         {
             Ok(Some(app)) => {
                 if app.secret == value.secret {
-                    Ok(app)
+                    Ok(app.into())
                 } else {
                     Err(anyhow::Error::msg("Invalid request."))
                 }
@@ -569,8 +622,15 @@ impl Application {
     }
 }
 
-impl Model for Application {
+impl Model for ApplicationDB {
     const TABLE: &'static str = "corvus-apps";
+}
+
+impl From<ApplicationDB> for ApplicationResponse {
+    fn from(value: ApplicationDB) -> Self {
+        let app: Application = value.into();
+        return app.into();
+    }
 }
 
 impl From<Application> for ApplicationResponse {
@@ -619,6 +679,45 @@ pub struct UpdateApplication {
     pub name: Option<String>,
     pub callback_uris: Option<Vec<String>>,
     pub status: Option<AppStatus>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct AuthSuccess {
+    pub code: String,
+}
+
+impl AuthSuccess {
+    pub async fn new(user_id: String, app_id: String) -> Result<Self> {
+        // generate a random code
+        let code: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+        let db = AuthSuccessDB {
+            id: code.clone(),
+            user_id,
+            app_id,
+            exp: Utc::now().add(chrono::Duration::minutes(10)),
+        };
+        match db_handler::put_item::<AuthSuccessDB>(db).await {
+            Ok(_) => return Ok(Self { code }),
+            Err(_) => Err(anyhow!("Could not create code.")),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct AuthSuccessDB {
+    pub id: String,
+    pub user_id: String,
+    pub app_id: String,
+    #[serde(with = "ts_seconds")]
+    pub exp: DateTime<Utc>,
+}
+
+impl Model for AuthSuccessDB {
+    const TABLE: &'static str = "corvus_codes";
 }
 
 #[derive(Deserialize, Serialize, Clone)]

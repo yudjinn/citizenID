@@ -15,10 +15,10 @@ use crate::model::{AuthToken, RefreshToken, Scope};
 
 pub async fn hash_password(password: &str) -> Result<(String, String)> {
     let salt = SaltString::generate(&mut OsRng);
-    hash_string(password, salt).await
+    hash_string_enc(password, salt).await
 }
 
-pub async fn hash_string(val: &str, salt: SaltString) -> Result<(String, String)> {
+pub async fn hash_string_enc(val: &str, salt: SaltString) -> Result<(String, String)> {
     let argon = Argon2::default();
     if let Ok(hashed) = argon.hash_password(format!("{}{}", val, salt).as_bytes(), &salt) {
         Ok((hashed.to_string(), salt.to_string()))

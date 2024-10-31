@@ -5,7 +5,9 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::db_handler;
-use crate::model::{Application, ApplicationResponse, CreateApplication, UpdateApplication, User};
+use crate::model::{
+    Application, ApplicationDB, ApplicationResponse, CreateApplication, UpdateApplication, User,
+};
 use crate::utils::ApiResponse;
 
 use super::login::auth_middleware;
@@ -21,7 +23,7 @@ pub fn get_router() -> Router {
 }
 
 async fn get_apps(Extension(current_user): Extension<User>) -> ApiResponse {
-    match db_handler::get_all_from_table_with_filter_by_index::<Application>(
+    match db_handler::get_all_from_table_with_filter_by_index::<ApplicationDB>(
         "user_id",
         &current_user.id.to_string(),
     )
@@ -41,7 +43,8 @@ async fn get_apps(Extension(current_user): Extension<User>) -> ApiResponse {
 }
 
 async fn get_app(Extension(current_user): Extension<User>, Path(id): Path<Uuid>) -> ApiResponse {
-    match db_handler::get_item_from_table_with_filter_by_id::<Application>(&id.to_string()).await {
+    match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&id.to_string()).await
+    {
         Ok(Some(app)) => {
             if app.user_id == current_user.id {
                 return ApiResponse::Success(serde_json::to_value(app).unwrap());
@@ -58,7 +61,7 @@ async fn create_app(
     extract::Json(app): extract::Json<CreateApplication>,
 ) -> ApiResponse {
     match Application::new_from_template(&app, current_user.id).await {
-        Ok(new) => match db_handler::put_item::<Application>(new).await {
+        Ok(new) => match db_handler::put_item::<ApplicationDB>(new.into()).await {
             Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
             Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         },
@@ -66,13 +69,15 @@ async fn create_app(
     }
 }
 
+//TODO: regen secret for app
+
 async fn update_callbacks(
     Extension(current_user): Extension<User>,
     Path(id): Path<Uuid>,
     extract::Json(update): extract::Json<UpdateApplication>,
 ) -> ApiResponse {
     if let Some(mut app) =
-        db_handler::get_item_from_table_with_filter_by_id::<Application>(&id.to_string())
+        db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&id.to_string())
             .await
             .map_err(|_| ApiResponse::NotFound)
             .unwrap()
@@ -97,7 +102,7 @@ async fn update_callbacks(
         if update.name.is_some() {
             app.name = update.name.unwrap();
         }
-        match db_handler::put_item::<Application>(app).await {
+        match db_handler::put_item::<ApplicationDB>(app).await {
             Ok(u) => ApiResponse::Success(serde_json::to_value(u).unwrap()),
             Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
         }
@@ -110,12 +115,12 @@ async fn delete_app(
     Extension(current_user): Extension<User>,
     Path(app_id): Path<String>,
 ) -> ApiResponse {
-    match db_handler::get_item_from_table_with_filter_by_id::<Application>(&app_id).await {
+    match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&app_id).await {
         Ok(Some(app)) => {
             if current_user.id != app.user_id {
                 return ApiResponse::Unauthorized;
             }
-            match db_handler::delete_item::<Application>(app.id.to_string()).await {
+            match db_handler::delete_item::<ApplicationDB>(app.id.to_string()).await {
                 Ok(_) => ApiResponse::Success(json!("Success.")),
                 Err(e) => ApiResponse::InternalServerErrorWithMessage(e),
             }

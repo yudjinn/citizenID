@@ -31,7 +31,7 @@ authorization_url = 'https://api-staging.citizen-id.space/oauth?app_id=b10cadbb-
 init_response = requests.get(authorization_url, headers=headers)
 auth_payload = json.loads(init_response.text).get("payload")
 
-approve_url = 'https://api-staging.citizen-id.space/oauth/authorize?app_id=b10cadbb-f041-48e1-902d-e4a356ded54d&state=test&scopes=get_user'
+approve_url = 'https://api-staging.citizen-id.space/oauth/authorize'
 post_headers = headers.update({'Content-Type': 'application/json'})
 approve_response = requests.post(approve_url, headers=headers, json=auth_payload)
 
