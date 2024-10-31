@@ -24,7 +24,6 @@ use super::login::auth_middleware;
 pub fn get_router() -> Router {
     Router::new()
         .route("/", get(init_authorization))
-        .route("/preflight", get(preflight))
         .route("/authorize", post(approve_authorization))
         .layer(middleware::from_fn(auth_middleware))
         .route("/test", get(test_oauth))
@@ -64,46 +63,6 @@ async fn test_oauth(
     }
 }
 
-pub async fn preflight(
-    params: Option<Query<OauthParams>>,
-    Extension(_current_user): Extension<User>,
-) -> ApiResponse {
-    let params = if params.is_none() {
-        return ApiResponse::MissingData(json!("Missing query parameters."));
-    } else {
-        params.unwrap()
-    };
-    let mut reasons: Vec<String> = vec![];
-    if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-        &params.app_id.to_string(),
-    )
-    .await
-    {
-        if params.redirect_uri.is_some()
-            && !app
-                .callback_uris
-                .contains(params.redirect_uri.as_ref().unwrap())
-        {
-            reasons.push("Invalid redirect URI: Not contained in application spec.".into());
-        }
-        if params.state.is_empty() {
-            reasons.push("Please provide a valid state string.".into());
-        }
-        for s in params.scopes.split('+').map(|t| t.to_owned()) {
-            let b: Scope = s.clone().into();
-            if b == Scope::Invalid {
-                reasons.push(format!("Scope '{}' is invalid.", s));
-            }
-        }
-    } else {
-        reasons.push("App ID Invalid".into());
-    }
-    if reasons.len() > 0 {
-        return ApiResponse::MissingData(json!(reasons));
-    }
-    return ApiResponse::Success(json!("No issues detected."));
-}
-
 pub async fn init_authorization(
     params: Option<Query<OauthParams>>,
     Extension(current_user): Extension<User>,
@@ -129,23 +88,27 @@ pub async fn init_authorization(
             None => app.callback_uris.first().unwrap().clone(),
         };
 
-        let s: Vec<Scope> = params
-            .scopes
-            .split('+')
-            .map(|t| t.to_owned().into())
-            .collect();
+        let mut sc = vec![];
+        for s in params.scopes.split('+').map(|t| t.to_owned()) {
+            let b: Scope = s.clone().into();
+            if b == Scope::Invalid {
+                return ApiResponse::MissingData(json!(format!("Scope {} is invalid", s)));
+            } else {
+                sc.push(b);
+            }
+        }
         let st = params.state.to_string();
         let review = AuthReview {
             app_id: app.id,
             app_name: app.name,
             user_id: current_user.id,
             redirect_uri: ri,
-            scopes: s,
+            scopes: sc,
             state: st,
         };
-        ApiResponse::Success(serde_json::to_value(review).unwrap())
+        return ApiResponse::Success(serde_json::to_value(review).unwrap());
     } else {
-        ApiResponse::NotFound
+        return ApiResponse::MissingData(json!("Unknown Application."));
     }
 }
 
