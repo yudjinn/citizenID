@@ -17,7 +17,7 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
      state: Optional
      scopes
 ```
-- Scopes here are a "+" separated list of [Scopes](integration_and_usage#Scopes).
+- Scopes here are a "+" separated list of [scopes](#scopes)
 2. The end user will be required to login first, but after approval, a redirect will happen to the given `redirect_uri` with a `code`
 3. This code acts as a one-time-use authority to enable linking of an account. To use it, make a POST request to `citizen-id.space/login/oauth` with json body of:
 ```json
@@ -42,7 +42,7 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
 - "get_discord"
 
 ## Usage
-The `auth_token` from the [Setup](integration_and_usage#Setup) section can be used to hit the API as if you were the user.
-The API endpoints are detailed more in [endpoints.md](endpoints), but the key usage is:
+The `auth_token` from the [Setup](#setup) section can be used to hit the API as if you were the user.
+The API endpoints are detailed more in [endpoints.md](/docs/endpoints.md), but the key usage is:
 API URI: `api.citizen-id.space`
 Headers: `auth_token`

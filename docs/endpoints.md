@@ -1,4 +1,4 @@
-
+# Endpoints
 ## Authentication
 headers:
 - `auth_token`
