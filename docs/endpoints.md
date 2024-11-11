@@ -2,9 +2,9 @@
 ## Authentication
 headers:
 - `auth_token`
-- `refresh_token`
 
-Endpoints marked with a 🔒 require a valid `auth_token` in  the header
+- Endpoints marked with a 🔒 require a valid `auth_token` in  the header
+- Endpoints marked with 🚫 can only be accessed from certain contexts, and should not be relied upon by applications.
 
 ## Misc
 ```
@@ -13,7 +13,7 @@ GET "/ping" : {} => "pong"
 
 ## Login
 ```
-POST "/login/email" : {
+🚫 POST "/login/email" : {
 	email: String,
 	password: String,
 } => {
@@ -38,8 +38,8 @@ POST "/login/email" : {
 ##  Users
 ```
 🔒 GET "/user" : {} => {
-	discord_sf: Option<String>,
-	email: Option<String>,
+	🚫 discord_sf: Option<String>,
+	🚫 email: Option<String>,
 	id: Uuid,
 	rsi_id: Option<String>,
 	sentinel: String,

@@ -352,6 +352,24 @@ pub struct UserResponse {
     pub sentinel: String,
     pub status: UserStatus,
 }
+impl UserResponse {
+    pub fn scoped(&self, scopes: Vec<Scope>) -> Self {
+        let mut ret = self.clone();
+        if !scopes.contains(&Scope::Full) {
+            ret.email = None;
+            ret.discord_sf = None;
+            ret.sentinel = String::from("[redacted]");
+        }
+        if !scopes.contains(&Scope::GetUser) {
+            ret.status = UserStatus::Unknown;
+            ret.rsi_id = None;
+        }
+        if scopes.contains(&Scope::GetDiscordID) {
+            ret.discord_sf = self.discord_sf.clone();
+        }
+        return ret;
+    }
+}
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OAuthUser {
@@ -389,18 +407,6 @@ impl From<User> for UserResponse {
 }
 
 impl User {
-    pub fn scoped(&self, scopes: Vec<Scope>) -> Self {
-        let mut ret = self.clone();
-        if !scopes.contains(&Scope::Full) {
-            ret.email = None;
-            ret.hashed_password = None;
-            ret.discord_sf = None;
-        }
-        if scopes.contains(&Scope::GetDiscordID) {
-            ret.discord_sf = self.discord_sf.clone();
-        }
-        return self.clone();
-    }
     pub async fn new_from_email(email: &str, password: &str) -> Result<Self> {
         let (hashed, salt) = hash_password(password).await?;
         let id = Uuid::new_v4();

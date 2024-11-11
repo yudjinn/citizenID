@@ -48,7 +48,7 @@ async fn get_user(
                 let user_resp = user.clone();
 
                 ApiResponse::Success(
-                    serde_json::to_value(UserResponse::from(user_resp.scoped(_scopes))).unwrap(),
+                    serde_json::to_value(UserResponse::from(user_resp).scoped(_scopes)).unwrap(),
                 )
             } else {
                 ApiResponse::Unauthorized
