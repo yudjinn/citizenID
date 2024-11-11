@@ -20,6 +20,8 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       with:
         save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Update dependencies
+      run: cargo update
     - name: Build Application
       run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda
     - name: Rename output
