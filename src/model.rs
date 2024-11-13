@@ -71,6 +71,7 @@ pub struct RefreshTokenDB {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum GrantType {
     RefreshToken,
     AuthorizationCode,
