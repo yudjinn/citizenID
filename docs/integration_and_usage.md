@@ -19,18 +19,20 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
 ```
 - Scopes here are a "+" separated list of [scopes](#scopes)
 2. The end user will be required to login first, but after approval, a redirect will happen to the given `redirect_uri` with a `code`
-3. This code acts as a one-time-use authority to enable linking of an account. To use it, make a POST request to `citizen-id.space/login/oauth` with json body of:
+3. This code acts as a one-time-use authority to enable initial access of an account. To use it, make a POST request to `citizen-id.space/login/token` with json body of:
 ```json
 {
-    "code": "code from previous step",
+    "grant_type": "authorization_code",
+    "authorization_code": "code from previous step",
     "app_id": "app ID from setup",
-    "secret": "secret from setup"
+    "app_secret": "secret from setup"
 }
 ```
 - This will return an `auth_token` and `refresh_token`. The `auth_token` will have the scopes specified during the oauth process, and the `refresh_token` can be used to get a new token set on expiry.
 4. To get a new token set, a POST request to `citizen-id.space/login/token` with the body:
 ```json
 {
+    "grant_type": "refresh_token",
     "refresh_token": "refresh_token for user",
     "app_id": "app ID from setup"
 }

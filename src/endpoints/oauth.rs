@@ -67,10 +67,9 @@ pub async fn init_authorization(
     params: Option<Query<OauthParams>>,
     Extension(current_user): Extension<User>,
 ) -> ApiResponse {
-    let params = if params.is_none() {
-        return ApiResponse::MissingData(json!("Missing query parameters."));
-    } else {
-        params.unwrap()
+    let params = match params.is_none() {
+        true => return ApiResponse::MissingData(json!("Missing query parameters.")),
+        false => params.unwrap(),
     };
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.app_id.to_string(),
@@ -79,7 +78,7 @@ pub async fn init_authorization(
     {
         let ri = match params.redirect_uri.as_ref() {
             Some(parsed) => {
-                if app.callback_uris.contains(&parsed) {
+                if app.callback_uris.contains(parsed) {
                     parsed.clone()
                 } else {
                     return ApiResponse::MissingData(json!("Invalid URI."));
@@ -106,9 +105,9 @@ pub async fn init_authorization(
             scopes: sc,
             state: st,
         };
-        return ApiResponse::Success(serde_json::to_value(review).unwrap());
+        ApiResponse::Success(serde_json::to_value(review).unwrap())
     } else {
-        return ApiResponse::MissingData(json!("Unknown Application."));
+        ApiResponse::MissingData(json!("Unknown Application."))
     }
 }
 
@@ -138,14 +137,14 @@ pub async fn approve_authorization(
                     if let Ok(succ) =
                         AuthSuccess::new(current_user.id.to_string(), app.id.to_string()).await
                     {
-                        return ApiResponse::Success(json!(succ));
+                        ApiResponse::Success(json!(succ))
                     } else {
-                        return ApiResponse::InternalServerErrorWithMessage(anyhow!(
+                        ApiResponse::InternalServerErrorWithMessage(anyhow!(
                             "Could not associate user with application."
-                        ));
+                        ))
                     }
                 }
-                _ => return ApiResponse::InternalServerError,
+                _ => ApiResponse::InternalServerError,
             }
         }
         Err(_) => ApiResponse::InternalServerErrorWithMessage(anyhow!(

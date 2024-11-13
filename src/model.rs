@@ -71,9 +71,59 @@ pub struct RefreshTokenDB {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+pub enum GrantType {
+    RefreshToken,
+    AuthorizationCode,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(try_from = "RefreshTokenRequestUnchecked")]
 pub struct RefreshTokenRequest {
-    pub refresh_token: String,
+    pub grant_type: GrantType,
+    pub refresh_token: Option<String>,
+    pub authorization_code: Option<String>,
     pub app_id: Uuid,
+    pub app_secret: Option<String>,
+}
+
+impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
+    type Error = String;
+
+    fn try_from(
+        value: RefreshTokenRequestUnchecked,
+    ) -> std::prelude::v1::Result<Self, Self::Error> {
+        match value.grant_type {
+            GrantType::RefreshToken => {
+                if value.refresh_token.is_none() {
+                    return Err("Missing value: 'refresh_token'.".to_string());
+                }
+            }
+            GrantType::AuthorizationCode => {
+                if value.authorization_code.is_none() {
+                    return Err("Missing value: 'authorization_code'.".to_string());
+                }
+                if value.app_secret.is_none() {
+                    return Err("Missing value: 'app_secret'.".to_string());
+                }
+            }
+        }
+        Ok(Self {
+            grant_type: value.grant_type,
+            refresh_token: value.refresh_token,
+            authorization_code: value.authorization_code,
+            app_id: value.app_id,
+            app_secret: value.app_secret,
+        })
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct RefreshTokenRequestUnchecked {
+    pub grant_type: GrantType,
+    pub refresh_token: Option<String>,
+    pub authorization_code: Option<String>,
+    pub app_id: Uuid,
+    pub app_secret: Option<String>,
 }
 
 impl From<RefreshToken> for RefreshTokenDB {
@@ -367,7 +417,7 @@ impl UserResponse {
         if scopes.contains(&Scope::GetDiscordID) {
             ret.discord_sf = self.discord_sf.clone();
         }
-        return ret;
+        ret
     }
 }
 
@@ -500,13 +550,6 @@ impl UpdateUser {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct LoginOauth {
-    pub code: String,
-    pub app_id: String,
-    pub secret: String,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
 pub struct LoginUser {
     pub email: Option<String>,
     pub password: Option<String>,
@@ -579,15 +622,15 @@ impl From<Application> for ApplicationDB {
     }
 }
 
-impl Into<Application> for ApplicationDB {
-    fn into(self) -> Application {
+impl From<ApplicationDB> for Application {
+    fn from(val: ApplicationDB) -> Self {
         Application {
-            id: self.id,
-            user_id: self.user_id,
-            name: self.name,
-            secret: self.secret,
-            callback_uris: self.callback_uris,
-            status: self.status,
+            id: val.id,
+            user_id: val.user_id,
+            name: val.name,
+            secret: val.secret,
+            callback_uris: val.callback_uris,
+            status: val.status,
         }
     }
 }
@@ -634,7 +677,7 @@ impl Model for ApplicationDB {
 impl From<ApplicationDB> for ApplicationResponse {
     fn from(value: ApplicationDB) -> Self {
         let app: Application = value.into();
-        return app.into();
+        app.into()
     }
 }
 
@@ -706,7 +749,7 @@ impl AuthSuccess {
             exp: Utc::now().add(chrono::Duration::minutes(10)),
         };
         match db_handler::put_item::<AuthSuccessDB>(db).await {
-            Ok(_) => return Ok(Self { code }),
+            Ok(_) => Ok(Self { code }),
             Err(_) => Err(anyhow!("Could not create code.")),
         }
     }

@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::model::ApplicationDB;
 use crate::model::AuthSuccessDB;
 use crate::model::DiscordUserResponse;
-use crate::model::LoginOauth;
+use crate::model::GrantType;
 use crate::model::UserStatus;
 use crate::model::{
     ApprovedApplication, DiscordTokenLogin, LoginUser, RefreshToken, RefreshTokenDB,
@@ -40,7 +40,6 @@ pub fn get_router() -> Router {
         .route("/logout_all", post(invalidate_all_tokens))
         .layer(middleware::from_fn(auth_middleware))
         .route("/login/email", post(login_with_email))
-        .route("/login/oauth", post(login_with_oauth))
         .route("/login/token", post(get_new_token))
         .route("/login/discord", post(login_with_discord))
         .route("/login/discord", delete(revoke_discord))
@@ -51,60 +50,6 @@ async fn invalidate_all_tokens(Extension(current_user): Extension<User>) -> ApiR
         Ok(_) => ApiResponse::Success(json!("Success")),
         _ => ApiResponse::InternalServerError,
     }
-}
-async fn login_with_oauth(extract::Json(login): extract::Json<LoginOauth>) -> ApiResponse {
-    // make sure the secret matches the app
-    if let Ok(Some(app)) =
-        db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&login.app_id).await
-    {
-        let mut hasher = Sha256::new();
-        hasher.update(login.secret);
-        let result = hasher.finalize();
-        let sec_hash = Base64::encode_string(&result);
-        if sec_hash != app.secret {
-            return ApiResponse::Unauthorized;
-        }
-
-        // make sure the code matches the app
-        if let Ok(Some(auth_success)) =
-            db_handler::get_item_from_table_with_filter_by_id::<AuthSuccessDB>(&login.code).await
-        {
-            if auth_success.app_id != app.id.to_string() {
-                return ApiResponse::Unauthorized;
-            }
-
-            // remove the code
-            if db_handler::delete_item::<AuthSuccessDB>(auth_success.id.clone())
-                .await
-                .is_ok()
-            {
-                // return the token login info
-                if let Ok(uid) = Uuid::parse_str(&auth_success.user_id) {
-                    if let Ok(scopes) = Scope::check_user_app_relationship(uid, app.id).await {
-                        let (r, a) = generate_token_pair(uid, app.id, None, scopes)
-                            .await
-                            .map_err(ApiResponse::InternalServerErrorWithMessage)
-                            .unwrap();
-                        let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                            .map_err(|_| ApiResponse::InternalServerError)
-                            .unwrap();
-                        let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                            .map_err(|_| ApiResponse::InternalServerError)
-                            .unwrap();
-
-                        return ApiResponse::Success(
-                            serde_json::to_value(AuthResponse {
-                                auth_token: signed_auth_token,
-                                refresh_token: signed_ref_token,
-                            })
-                            .unwrap(),
-                        );
-                    }
-                }
-            }
-        }
-    }
-    ApiResponse::Unauthorized
 }
 
 async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> ApiResponse {
@@ -259,7 +204,7 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             let u = User::new_from_discord(&snowflake).await;
             if let Ok(user) = db_handler::put_item::<User>(u).await {
                 let mut hasher = Sha256::new();
-                hasher.update(format!("{}{}", user.id, MASTER_APP_ID.to_owned()));
+                hasher.update(format!("{}{}", user.id, *MASTER_APP_ID));
                 let result = hasher.finalize();
                 let id = Base64::encode_string(&result);
                 let aa = ApprovedApplication {
@@ -328,8 +273,77 @@ async fn revoke_discord(
     }
 }
 
-async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>) -> ApiResponse {
-    if let Ok(token) = RefreshToken::from_header_str(&token.refresh_token).await {
+async fn get_new_token(extract::Json(request): extract::Json<RefreshTokenRequest>) -> ApiResponse {
+    // split based on refresh_token or auth_code workflows
+    match request.grant_type {
+        GrantType::RefreshToken => refresh_token_workflow(request).await,
+        GrantType::AuthorizationCode => auth_code_workflow(request).await,
+    }
+}
+
+pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
+    {
+        // make sure the secret matches the app
+        if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
+            &request.app_id.to_string(),
+        )
+        .await
+        {
+            let mut hasher = Sha256::new();
+            hasher.update(request.app_secret.unwrap());
+            let result = hasher.finalize();
+            let sec_hash = Base64::encode_string(&result);
+            if sec_hash != app.secret {
+                return ApiResponse::Unauthorized;
+            }
+
+            // make sure the code matches the app
+            if let Ok(Some(auth_success)) = db_handler::get_item_from_table_with_filter_by_id::<
+                AuthSuccessDB,
+            >(&request.authorization_code.unwrap())
+            .await
+            {
+                if auth_success.app_id != app.id.to_string() {
+                    return ApiResponse::Unauthorized;
+                }
+
+                // remove the code
+                if db_handler::delete_item::<AuthSuccessDB>(auth_success.id.clone())
+                    .await
+                    .is_ok()
+                {
+                    // return the token login info
+                    if let Ok(uid) = Uuid::parse_str(&auth_success.user_id) {
+                        if let Ok(scopes) = Scope::check_user_app_relationship(uid, app.id).await {
+                            let (r, a) = generate_token_pair(uid, app.id, None, scopes)
+                                .await
+                                .map_err(ApiResponse::InternalServerErrorWithMessage)
+                                .unwrap();
+                            let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
+                                .map_err(|_| ApiResponse::InternalServerError)
+                                .unwrap();
+                            let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                                .map_err(|_| ApiResponse::InternalServerError)
+                                .unwrap();
+
+                            return ApiResponse::Success(
+                                serde_json::to_value(AuthResponse {
+                                    auth_token: signed_auth_token,
+                                    refresh_token: signed_ref_token,
+                                })
+                                .unwrap(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        ApiResponse::Unauthorized
+    }
+}
+
+pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse {
+    if let Ok(token) = RefreshToken::from_header_str(&request.refresh_token.unwrap()).await {
         match db_handler::get_item_from_table_with_filter_by_id::<RefreshTokenDB>(&token.hash())
             .await
         {
@@ -377,7 +391,6 @@ async fn get_new_token(extract::Json(token): extract::Json<RefreshTokenRequest>)
         ApiResponse::Unauthorized
     }
 }
-
 pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()

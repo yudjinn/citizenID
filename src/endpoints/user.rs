@@ -107,7 +107,7 @@ async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
                 Ok(new) => match db_handler::put_item::<User>(new).await {
                     Ok(u) => {
                         let mut hasher = Sha256::new();
-                        hasher.update(format!("{}{}", u.id, MASTER_APP_ID.to_owned()));
+                        hasher.update(format!("{}{}", u.id, *MASTER_APP_ID));
                         let result = hasher.finalize();
                         let id = Base64::encode_string(&result);
                         let aa = ApprovedApplication {

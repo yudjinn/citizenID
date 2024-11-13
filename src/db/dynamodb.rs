@@ -132,12 +132,12 @@ where
     if let Ok(result) = req.send().await {
         if let Some(items) = result.items {
             let t: Vec<T> = from_items(items)?;
-            return Ok(t.clone());
+            Ok(t.clone())
         } else {
-            return Ok(Vec::new());
+            Ok(Vec::new())
         }
     } else {
-        return Ok(Vec::new());
+        Ok(Vec::new())
     }
 }
 
