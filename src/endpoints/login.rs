@@ -27,7 +27,7 @@ use crate::model::{
 };
 use crate::utils::{generate_token_pair, ApiResponse};
 use crate::{db_handler, utils::check_hash};
-use crate::{KEYS, MASTER_APP_ID};
+use crate::{KEYS, MASTER_CLIENT_ID};
 
 // async fn api_checker(req: &Request, api_key: ApiKey) -> Option<User> {
 //     let server_key = req.data::<ServerKey>().unwrap();
@@ -80,7 +80,7 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                             if v {
                                 let (r, a) = generate_token_pair(
                                     user.id,
-                                    Uuid::parse_str(&MASTER_APP_ID.to_string()).unwrap(),
+                                    Uuid::parse_str(&MASTER_CLIENT_ID.to_string()).unwrap(),
                                     None,
                                     vec![Scope::Full],
                                 )
@@ -163,7 +163,7 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
     let snowflake = discord_response.id;
 
     if let Some(app) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-        &token.app_id.to_string(),
+        &token.client_id.to_string(),
     )
     .await
     .unwrap()
@@ -175,10 +175,10 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             if user.status == UserStatus::Inactive {
                 return ApiResponse::NotFound;
             }
-            match Scope::check_user_app_relationship(user.id, app.id).await {
+            match Scope::check_user_client_relationship(user.id, app.id).await {
                 Ok(scopes) => {
                     // user exists, login
-                    let (r, a) = generate_token_pair(user.id, token.app_id, None, scopes)
+                    let (r, a) = generate_token_pair(user.id, token.client_id, None, scopes)
                         .await
                         .map_err(ApiResponse::InternalServerErrorWithMessage)
                         .unwrap();
@@ -204,20 +204,20 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
             let u = User::new_from_discord(&snowflake).await;
             if let Ok(user) = db_handler::put_item::<User>(u).await {
                 let mut hasher = Sha256::new();
-                hasher.update(format!("{}{}", user.id, *MASTER_APP_ID));
+                hasher.update(format!("{}{}", user.id, *MASTER_CLIENT_ID));
                 let result = hasher.finalize();
                 let id = Base64::encode_string(&result);
                 let aa = ApprovedApplication {
                     id,
                     user_id: user.id,
-                    app_id: MASTER_APP_ID.to_owned(),
-                    app_name: "CORVUS".into(),
+                    client_id: MASTER_CLIENT_ID.to_owned(),
+                    client_name: "CORVUS".into(),
                     scopes: Scope::all(),
                 };
                 match db_handler::put_item::<ApprovedApplication>(aa).await {
                     Ok(aa) => {
                         // user exists, login
-                        let (r, a) = generate_token_pair(user.id, token.app_id, None, aa.scopes)
+                        let (r, a) = generate_token_pair(user.id, token.client_id, None, aa.scopes)
                             .await
                             .map_err(ApiResponse::InternalServerErrorWithMessage)
                             .unwrap();
@@ -285,12 +285,12 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
     {
         // make sure the secret matches the app
         if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-            &request.app_id.to_string(),
+            &request.client_id.to_string(),
         )
         .await
         {
             let mut hasher = Sha256::new();
-            hasher.update(request.app_secret.unwrap());
+            hasher.update(request.client_secret.unwrap());
             let result = hasher.finalize();
             let sec_hash = Base64::encode_string(&result);
             if sec_hash != app.secret {
@@ -303,7 +303,7 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
             >(&request.authorization_code.unwrap())
             .await
             {
-                if auth_success.app_id != app.id.to_string() {
+                if auth_success.client_id != app.id.to_string() {
                     return ApiResponse::Unauthorized;
                 }
 
@@ -314,7 +314,8 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                 {
                     // return the token login info
                     if let Ok(uid) = Uuid::parse_str(&auth_success.user_id) {
-                        if let Ok(scopes) = Scope::check_user_app_relationship(uid, app.id).await {
+                        if let Ok(scopes) = Scope::check_user_client_relationship(uid, app.id).await
+                        {
                             let (r, a) = generate_token_pair(uid, app.id, None, scopes)
                                 .await
                                 .map_err(ApiResponse::InternalServerErrorWithMessage)
@@ -349,12 +350,16 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
         {
             Ok(Some(t)) => {
                 let mut token = token;
-                if t.valid && token.app_id == t.app_id {
-                    let (r, a) =
-                        generate_token_pair(token.user_id, t.app_id, Some(token.family), t.scopes)
-                            .await
-                            .map_err(|_| ApiResponse::InternalServerError)
-                            .unwrap();
+                if t.valid && token.client_id == t.client_id {
+                    let (r, a) = generate_token_pair(
+                        token.user_id,
+                        t.client_id,
+                        Some(token.family),
+                        t.scopes,
+                    )
+                    .await
+                    .map_err(|_| ApiResponse::InternalServerError)
+                    .unwrap();
                     token
                         .invalidate()
                         .await

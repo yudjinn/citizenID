@@ -40,8 +40,8 @@ lazy_static! {
         .unwrap()
         .parse::<bool>()
         .unwrap();
-    static ref MASTER_APP_ID: uuid::Uuid = uuid::Uuid::parse_str(
-        &std::env::var_os("MASTER_APP_ID")
+    static ref MASTER_CLIENT_ID: uuid::Uuid = uuid::Uuid::parse_str(
+        &std::env::var_os("MASTER_CLIENT_ID")
             .unwrap_or("adaf40f8-0f79-4dd0-a995-912604ccde95".into())
             .into_string()
             .unwrap()

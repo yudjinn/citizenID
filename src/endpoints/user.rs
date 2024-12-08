@@ -17,7 +17,7 @@ use crate::{
         User, UserResponse, UserStatus,
     },
     utils::{hash_password, ApiResponse},
-    MASTER_APP_ID,
+    MASTER_CLIENT_ID,
 };
 
 use super::login::auth_middleware;
@@ -107,14 +107,14 @@ async fn create_user_from_email(user: Json<CreateUserEmail>) -> ApiResponse {
                 Ok(new) => match db_handler::put_item::<User>(new).await {
                     Ok(u) => {
                         let mut hasher = Sha256::new();
-                        hasher.update(format!("{}{}", u.id, *MASTER_APP_ID));
+                        hasher.update(format!("{}{}", u.id, *MASTER_CLIENT_ID));
                         let result = hasher.finalize();
                         let id = Base64::encode_string(&result);
                         let aa = ApprovedApplication {
                             id,
                             user_id: u.id,
-                            app_id: MASTER_APP_ID.to_owned(),
-                            app_name: "CORVUS".into(),
+                            client_id: MASTER_CLIENT_ID.to_owned(),
+                            client_name: "CORVUS".into(),
                             scopes: Scope::all(),
                         };
                         match db_handler::put_item::<ApprovedApplication>(aa).await {

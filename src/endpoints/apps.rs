@@ -17,9 +17,9 @@ pub fn get_router() -> Router {
     Router::new()
         .route("/", get(get_apps))
         .route("/", post(create_app))
-        .route("/:app_id", get(get_app))
-        .route("/:app_id", delete(delete_app))
-        .route("/:app_id", patch(update_callbacks))
+        .route("/:client_id", get(get_app))
+        .route("/:client_id", delete(delete_app))
+        .route("/:client_id", patch(update_callbacks))
         .layer(middleware::from_fn(auth_middleware))
 }
 
@@ -122,12 +122,12 @@ async fn update_callbacks(
 async fn delete_app(
     Extension(current_user): Extension<User>,
     Extension(_scopes): Extension<Scopes>,
-    Path(app_id): Path<String>,
+    Path(client_id): Path<String>,
 ) -> ApiResponse {
     if !Scope::check_scopes(&_scopes, &Scope::Full) {
         return ApiResponse::Unauthorized;
     }
-    match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&app_id).await {
+    match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(&client_id).await {
         Ok(Some(app)) => {
             if current_user.id != app.user_id {
                 return ApiResponse::Unauthorized;

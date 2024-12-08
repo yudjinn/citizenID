@@ -12,7 +12,7 @@ The integrating application (referred to as "App") has a specific workflow setup
 App will provide some kind of "Login with CitizenID!" button. This button will do the following:
 1. Route to `citizen-id.space/oauth` with query parameters as follows:
 ```
-     app_id
+     client_id
      redirect_uri: Optional, but recommended
      state: Optional
      scopes
@@ -24,8 +24,8 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
 {
     "grant_type": "authorization_code",
     "authorization_code": "code from previous step",
-    "app_id": "app ID from setup",
-    "app_secret": "secret from setup"
+    "client_id": "app ID from setup",
+    "client_secret": "secret from setup"
 }
 ```
 - This will return an `auth_token` and `refresh_token`. The `auth_token` will have the scopes specified during the oauth process, and the `refresh_token` can be used to get a new token set on expiry.
@@ -34,7 +34,7 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
 {
     "grant_type": "refresh_token",
     "refresh_token": "refresh_token for user",
-    "app_id": "app ID from setup"
+    "client_id": "app ID from setup"
 }
 ```
 - This will return a new keyset and usage can continue

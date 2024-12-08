@@ -19,7 +19,7 @@ GET "/ping" : {} => "pong"
 } => {
 	"auth_token": String,
 	"refresh_token": String,
-	"app_id": Uuid
+	"client_id": Uuid
 }
 
 🔒 POST  "/login/token" : {
@@ -27,7 +27,7 @@ GET "/ping" : {} => "pong"
 } => {
 	"grant_type": "refresh_token",
 	"refresh_token": String,
-	"app_id": Uuid
+	"client_id": Uuid
 }
 
 🔒 POST  "/login/token" : {
@@ -35,8 +35,8 @@ GET "/ping" : {} => "pong"
 } => {
 	"grant_type": "authorization_code",
 	"authorization_code": String,
-	"app_id": Uuid,
-	"app_secret": String
+	"client_id": Uuid,
+	"client_secret": String
 }
 
 🔒 POST  "/logout" : {
@@ -57,8 +57,8 @@ GET "/ping" : {} => "pong"
 
 🔒 GET "/user/apps" : {} => {
 	[
-		"app_id",
-		"app_name",
+		"client_id",
+		"client_name",
 		"scopes"
 	]
 }
@@ -112,9 +112,9 @@ POST "/user" : {
 	"status": [Active, Inactive, Unknown]
 }
 
-🔒  DELETE "/applications/{app_id}" : {} => {}
+🔒  DELETE "/applications/{client_id}" : {} => {}
 
-🔒  PATCH "/applications/{app_id}" : {
+🔒  PATCH "/applications/{client_id}" : {
 		name: String,
 		callback_uris: List<String>,
 		status: [Active, Inactive,  Unknown],
@@ -125,7 +125,7 @@ POST "/user" : {
 		"status": [Active, Inactive,  Unknown],
 }
 
-🔒  GET "/applications/{app_id}" : {} => {
+🔒  GET "/applications/{client_id}" : {} => {
 		"id": Uuid,
 		"name": String,
 		"callback_uris": List<String>,
@@ -135,24 +135,24 @@ POST "/user" : {
 
 ## OAuth
 ```
-🔒 GET "/oauth?app_id&state&scopes&redirect_url" : {
-	app_id: Uuid,
+🔒 GET "/oauth?client_id&state&scopes&redirect_url" : {
+	client_id: Uuid,
 	state: code that is returned,
 	scopes: '+' delimited list of scopes,
 	redirect_uri: must exist in app's allowed uris
 } => 
 {
 	// This is to review and show the user as acceptance
-	"app_id": Uuid,
-	"app_name": String,
+	"client_id": Uuid,
+	"client_name": String,
 	"user_id": Uuid,
 	"redirect_uri": String,
 	"scopes": Vec<String>,
 	"state": String
 
 🔒 POST "/oauth/authorize" : {
-	app_id: Uuid,
-	app_name: String,
+	client_id: Uuid,
+	client_name: String,
 	user_id: Uuid,
 	redirect_uri: String,
 	scopes: Vec<String>,

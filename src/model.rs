@@ -35,8 +35,8 @@ pub enum TokenVersion {
 pub struct ApprovedApplication {
     pub id: String,
     pub user_id: Uuid,
-    pub app_id: Uuid,
-    pub app_name: String,
+    pub client_id: Uuid,
+    pub client_name: String,
     pub scopes: Scopes,
 }
 
@@ -48,7 +48,7 @@ impl Model for ApprovedApplication {
 pub struct RefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub app_id: Uuid,
+    pub client_id: Uuid,
     pub family: Uuid,
     pub scopes: Vec<Scope>,
     pub valid: bool,
@@ -61,7 +61,7 @@ pub struct RefreshToken {
 pub struct RefreshTokenDB {
     pub id: String,
     pub user_id: Uuid,
-    pub app_id: Uuid,
+    pub client_id: Uuid,
     pub valid: bool,
     pub family: Uuid,
     pub scopes: Vec<Scope>,
@@ -83,8 +83,8 @@ pub struct RefreshTokenRequest {
     pub grant_type: GrantType,
     pub refresh_token: Option<String>,
     pub authorization_code: Option<String>,
-    pub app_id: Uuid,
-    pub app_secret: Option<String>,
+    pub client_id: Uuid,
+    pub client_secret: Option<String>,
 }
 
 impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
@@ -103,8 +103,8 @@ impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
                 if value.authorization_code.is_none() {
                     return Err("Missing value: 'authorization_code'.".to_string());
                 }
-                if value.app_secret.is_none() {
-                    return Err("Missing value: 'app_secret'.".to_string());
+                if value.client_secret.is_none() {
+                    return Err("Missing value: 'client_secret'.".to_string());
                 }
             }
         }
@@ -112,8 +112,8 @@ impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
             grant_type: value.grant_type,
             refresh_token: value.refresh_token,
             authorization_code: value.authorization_code,
-            app_id: value.app_id,
-            app_secret: value.app_secret,
+            client_id: value.client_id,
+            client_secret: value.client_secret,
         })
     }
 }
@@ -123,8 +123,8 @@ pub struct RefreshTokenRequestUnchecked {
     pub grant_type: GrantType,
     pub refresh_token: Option<String>,
     pub authorization_code: Option<String>,
-    pub app_id: Uuid,
-    pub app_secret: Option<String>,
+    pub client_id: Uuid,
+    pub client_secret: Option<String>,
 }
 
 impl From<RefreshToken> for RefreshTokenDB {
@@ -132,7 +132,7 @@ impl From<RefreshToken> for RefreshTokenDB {
         let id = value.hash();
         RefreshTokenDB {
             id,
-            app_id: value.app_id,
+            client_id: value.client_id,
             user_id: value.user_id,
             family: value.family,
             scopes: value.scopes,
@@ -226,20 +226,20 @@ impl RefreshToken {
         Base64::encode_string(&result)
     }
 
-    pub async fn default(user_id: Uuid, scopes: Vec<Scope>, app_id: Uuid) -> Result<Self> {
-        RefreshToken::new(user_id, Uuid::new_v4(), scopes, app_id).await
+    pub async fn default(user_id: Uuid, scopes: Vec<Scope>, client_id: Uuid) -> Result<Self> {
+        RefreshToken::new(user_id, Uuid::new_v4(), scopes, client_id).await
     }
 
     pub async fn new(
         user_id: Uuid,
         family: Uuid,
         scopes: Vec<Scope>,
-        app_id: Uuid,
+        client_id: Uuid,
     ) -> Result<Self> {
         let r = RefreshToken {
             id: Uuid::new_v4(),
             user_id,
-            app_id,
+            client_id,
             family,
             valid: true,
             scopes,
@@ -313,7 +313,10 @@ impl Scope {
         scopes.contains(target)
     }
 
-    pub async fn check_user_app_relationship(user_id: Uuid, app_id: Uuid) -> Result<Vec<Self>> {
+    pub async fn check_user_client_relationship(
+        user_id: Uuid,
+        client_id: Uuid,
+    ) -> Result<Vec<Self>> {
         match db_handler::get_all_from_table_with_filter_by_index::<ApprovedApplication>(
             "user_id",
             &user_id.to_string(),
@@ -322,11 +325,14 @@ impl Scope {
         {
             Ok(recs) => {
                 for r in recs {
-                    if r.app_id == app_id {
+                    if r.client_id == client_id {
                         return Ok(r.scopes);
                     }
                 }
-                Err(Error::msg(format!("Could not find record for {}", app_id)))
+                Err(Error::msg(format!(
+                    "Could not find record for {}",
+                    client_id
+                )))
             }
             Err(_) => Err(Error::msg(format!("Could not find record for {}", user_id))),
         }
@@ -736,7 +742,7 @@ pub struct AuthSuccess {
 }
 
 impl AuthSuccess {
-    pub async fn new(user_id: String, app_id: String) -> Result<Self> {
+    pub async fn new(user_id: String, client_id: String) -> Result<Self> {
         // generate a random code
         let code: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
@@ -746,7 +752,7 @@ impl AuthSuccess {
         let db = AuthSuccessDB {
             id: code.clone(),
             user_id,
-            app_id,
+            client_id,
             exp: Utc::now().add(chrono::Duration::minutes(10)),
         };
         match db_handler::put_item::<AuthSuccessDB>(db).await {
@@ -760,7 +766,7 @@ impl AuthSuccess {
 pub struct AuthSuccessDB {
     pub id: String,
     pub user_id: String,
-    pub app_id: String,
+    pub client_id: String,
     #[serde(with = "ts_seconds")]
     pub exp: DateTime<Utc>,
 }
@@ -771,8 +777,8 @@ impl Model for AuthSuccessDB {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct AuthReview {
-    pub app_id: Uuid,
-    pub app_name: String,
+    pub client_id: Uuid,
+    pub client_name: String,
     pub user_id: Uuid,
     pub scopes: Scopes,
     pub redirect_uri: String,
@@ -781,7 +787,7 @@ pub struct AuthReview {
 
 #[derive(Deserialize, Clone)]
 pub struct OauthParams {
-    pub app_id: Uuid,
+    pub client_id: Uuid,
     pub redirect_uri: Option<String>,
     pub state: Option<String>,
     pub scopes: String,
@@ -794,7 +800,7 @@ pub struct DiscordTokenLogin {
     pub expires_in: u32,
     pub refresh_token: String,
     pub scope: String,
-    pub app_id: Uuid,
+    pub client_id: Uuid,
 }
 
 #[allow(dead_code)]

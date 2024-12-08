@@ -34,21 +34,21 @@ async fn test_oauth(
     Json(auth): Json<AuthReview>,
 ) -> ApiResponse {
     let mut hasher = Sha256::new();
-    hasher.update(format!("{}{}", auth.user_id, auth.app_id));
+    hasher.update(format!("{}{}", auth.user_id, auth.client_id));
     let result = hasher.finalize();
     let id = Base64::encode_string(&result);
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,
         scopes: auth.scopes,
-        app_id: auth.app_id,
-        app_name: auth.app_name,
+        client_id: auth.client_id,
+        client_name: auth.client_name,
     };
     match db_handler::put_item::<ApprovedApplication>(aa).await {
         Ok(approved_app) => {
             let (r, _) = generate_token_pair(
                 current_user.id,
-                approved_app.app_id,
+                approved_app.client_id,
                 None,
                 approved_app.scopes,
             )
@@ -72,7 +72,7 @@ pub async fn init_authorization(
         false => params.unwrap(),
     };
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-        &params.app_id.to_string(),
+        &params.client_id.to_string(),
     )
     .await
     {
@@ -98,8 +98,8 @@ pub async fn init_authorization(
         }
         let st = params.state.clone();
         let review = AuthReview {
-            app_id: app.id,
-            app_name: app.name,
+            client_id: app.id,
+            client_name: app.name,
             user_id: current_user.id,
             redirect_uri: ri,
             scopes: sc,
@@ -116,20 +116,20 @@ pub async fn approve_authorization(
     Json(auth): Json<AuthReview>,
 ) -> ApiResponse {
     let mut hasher = Sha256::new();
-    hasher.update(format!("{}{}", auth.user_id, auth.app_id));
+    hasher.update(format!("{}{}", auth.user_id, auth.client_id));
     let result = hasher.finalize();
     let id = Base64::encode_string(&result);
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,
         scopes: auth.scopes,
-        app_id: auth.app_id,
-        app_name: auth.app_name,
+        client_id: auth.client_id,
+        client_name: auth.client_name,
     };
     match db_handler::put_item::<ApprovedApplication>(aa).await {
         Ok(approved_app) => {
             match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
-                &approved_app.app_id.to_string(),
+                &approved_app.client_id.to_string(),
             )
             .await
             {
