@@ -14,7 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::{
     db_handler,
     model::{
-        ApplicationDB, ApprovedApplication, AuthReview, AuthSuccess, OauthParams, Scope, User,
+        ApplicationDB, ApprovedApplication, AuthReview, AuthSuccess, OauthParams,
+        OauthResponseType, Scope, User,
     },
     utils::{generate_token_pair, ApiResponse},
 };
@@ -40,7 +41,7 @@ async fn test_oauth(
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,
-        scopes: auth.scopes,
+        scopes: auth.scope,
         client_id: auth.client_id,
         client_name: auth.client_name,
     };
@@ -68,7 +69,7 @@ pub async fn init_authorization(
     Extension(current_user): Extension<User>,
 ) -> ApiResponse {
     let params = match params.is_none() {
-        true => return ApiResponse::MissingData(json!("Missing query parameters.")),
+        true => return ApiResponse::MissingData(json!("Missing or incorrect query parameters.")),
         false => params.unwrap(),
     };
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
@@ -76,6 +77,15 @@ pub async fn init_authorization(
     )
     .await
     {
+        // check responsetype from request
+        match params.response_type {
+            OauthResponseType::Token => {
+                return ApiResponse::NotImplemented;
+            }
+            OauthResponseType::Code => {
+                // intentionally blank
+            }
+        }
         let ri = match params.redirect_uri.as_ref() {
             Some(parsed) => {
                 if app.callback_uris.contains(parsed) {
@@ -88,7 +98,7 @@ pub async fn init_authorization(
         };
 
         let mut sc = vec![];
-        for s in params.scopes.split('+').map(|t| t.to_owned()) {
+        for s in params.scope.split('+').map(|t| t.to_owned()) {
             let b: Scope = s.clone().into();
             if b == Scope::Invalid {
                 return ApiResponse::MissingData(json!(format!("Scope {} is invalid", s)));
@@ -102,7 +112,7 @@ pub async fn init_authorization(
             client_name: app.name,
             user_id: current_user.id,
             redirect_uri: ri,
-            scopes: sc,
+            scope: sc,
             state: st,
         };
         ApiResponse::Success(serde_json::to_value(review).unwrap())
@@ -122,7 +132,7 @@ pub async fn approve_authorization(
     let aa = ApprovedApplication {
         id,
         user_id: current_user.id,
-        scopes: auth.scopes,
+        scopes: auth.scope,
         client_id: auth.client_id,
         client_name: auth.client_name,
     };

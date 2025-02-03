@@ -780,7 +780,7 @@ pub struct AuthReview {
     pub client_id: Uuid,
     pub client_name: String,
     pub user_id: Uuid,
-    pub scopes: Scopes,
+    pub scope: Scopes,
     pub redirect_uri: String,
     pub state: Option<String>,
 }
@@ -790,7 +790,14 @@ pub struct OauthParams {
     pub client_id: Uuid,
     pub redirect_uri: Option<String>,
     pub state: Option<String>,
-    pub scopes: String,
+    pub scope: String,
+    pub response_type: OauthResponseType,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub enum OauthResponseType {
+    Token,
+    Code,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
