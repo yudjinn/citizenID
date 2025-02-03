@@ -65,13 +65,9 @@ async fn test_oauth(
 }
 
 pub async fn init_authorization(
-    params: Option<Query<OauthParams>>,
+    params: Query<OauthParams>,
     Extension(current_user): Extension<User>,
 ) -> ApiResponse {
-    let params = match params.is_none() {
-        true => return ApiResponse::MissingData(json!("Missing or incorrect query parameters.")),
-        false => params.unwrap(),
-    };
     if let Ok(Some(app)) = db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
         &params.client_id.to_string(),
     )
