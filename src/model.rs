@@ -1,4 +1,3 @@
-use core::fmt;
 use std::ops::Add;
 
 use anyhow::{anyhow, Error, Result};
@@ -214,7 +213,7 @@ impl RefreshToken {
         obj += &self.user_id.to_string();
         obj += &self.family.to_string();
         for s in &self.scopes {
-            obj += &format!("SCOPE.{}", s);
+            obj += &format!("SCOPE.{}", serde_json::to_string(&s).unwrap());
         }
         obj += &self.valid.to_string();
         obj += &self.exp.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -292,17 +291,6 @@ impl From<String> for Scope {
             "get_discord_id" => Self::GetDiscordID,
             // Full is not implementable via API
             _ => Self::Invalid,
-        }
-    }
-}
-
-impl fmt::Display for Scope {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Scope::Invalid => write!(f, "invalid"),
-            Scope::GetUser => write!(f, "get_user"),
-            Scope::GetDiscordID => write!(f, "get_discord_id"),
-            Scope::Full => write!(f, "full"),
         }
     }
 }

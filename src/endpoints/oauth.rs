@@ -95,7 +95,7 @@ pub async fn init_authorization(
 
         let mut sc = vec![];
         for s in params.scope.split('+').map(|t| t.to_owned()) {
-            let b: Scope = s.clone().into();
+            let b: Scope = Scope::from(s.clone());
             if b == Scope::Invalid {
                 return ApiResponse::MissingData(json!(format!("Scope {} is invalid", s)));
             } else {
