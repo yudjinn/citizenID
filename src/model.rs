@@ -277,6 +277,7 @@ impl RefreshToken {
 pub type Scopes = Vec<Scope>;
 
 #[derive(Deserialize, Serialize, Clone, EnumIter, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum Scope {
     Invalid,
     GetUser,
@@ -288,7 +289,8 @@ impl From<String> for Scope {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
             "get_user" => Self::GetUser,
-            "get_discord" => Self::GetDiscordID,
+            "get_discord_id" => Self::GetDiscordID,
+            // Full is not implementable via API
             _ => Self::Invalid,
         }
     }
@@ -795,6 +797,7 @@ pub struct OauthParams {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
 pub enum OauthResponseType {
     Token,
     Code,
