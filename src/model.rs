@@ -81,7 +81,7 @@ pub enum GrantType {
 pub struct RefreshTokenRequest {
     pub grant_type: GrantType,
     pub refresh_token: Option<String>,
-    pub authorization_code: Option<String>,
+    pub code: Option<String>,
     pub client_id: Uuid,
     pub client_secret: Option<String>,
 }
@@ -99,7 +99,7 @@ impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
                 }
             }
             GrantType::AuthorizationCode => {
-                if value.authorization_code.is_none() {
+                if value.code.is_none() {
                     return Err("Missing value: 'authorization_code'.".to_string());
                 }
                 if value.client_secret.is_none() {
@@ -110,7 +110,7 @@ impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
         Ok(Self {
             grant_type: value.grant_type,
             refresh_token: value.refresh_token,
-            authorization_code: value.authorization_code,
+            code: value.code,
             client_id: value.client_id,
             client_secret: value.client_secret,
         })
@@ -121,7 +121,7 @@ impl TryFrom<RefreshTokenRequestUnchecked> for RefreshTokenRequest {
 pub struct RefreshTokenRequestUnchecked {
     pub grant_type: GrantType,
     pub refresh_token: Option<String>,
-    pub authorization_code: Option<String>,
+    pub code: Option<String>,
     pub client_id: Uuid,
     pub client_secret: Option<String>,
 }

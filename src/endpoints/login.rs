@@ -300,7 +300,7 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
             // make sure the code matches the app
             if let Ok(Some(auth_success)) = db_handler::get_item_from_table_with_filter_by_id::<
                 AuthSuccessDB,
-            >(&request.authorization_code.unwrap())
+            >(&request.code.unwrap())
             .await
             {
                 if auth_success.client_id != app.id.to_string() {
