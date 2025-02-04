@@ -94,8 +94,13 @@ pub async fn init_authorization(
         };
 
         let mut sc = vec![];
-        for s in params.scope.split('+').map(|t| t.to_owned()) {
+        let mut del = ' ';
+        if params.scope.contains("+") {
+            del = '+';
+        }
+        for s in params.scope.split(del).map(|t| t.to_owned()) {
             let b: Scope = Scope::from(s.clone());
+            println!("FOUND SCOPE: {:?}", b);
             if b == Scope::Invalid {
                 return ApiResponse::MissingData(json!(format!("Scope {} is invalid", s)));
             } else {

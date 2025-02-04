@@ -273,7 +273,7 @@ async fn revoke_discord(
     }
 }
 
-async fn get_new_token(extract::Json(request): extract::Json<RefreshTokenRequest>) -> ApiResponse {
+async fn get_new_token(extract::Form(request): extract::Form<RefreshTokenRequest>) -> ApiResponse {
     // split based on refresh_token or auth_code workflows
     match request.grant_type {
         GrantType::RefreshToken => refresh_token_workflow(request).await,
