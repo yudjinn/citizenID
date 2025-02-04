@@ -280,7 +280,7 @@ pub type Scopes = Vec<Scope>;
 pub enum Scope {
     Invalid,
     GetUser,
-    GetDiscordID,
+    GetDiscordId,
     Full,
 }
 
@@ -288,7 +288,7 @@ impl From<String> for Scope {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
             "get_user" => Self::GetUser,
-            "get_discord_id" => Self::GetDiscordID,
+            "get_discord_id" => Self::GetDiscordId,
             // Full is not implementable via API
             _ => Self::Invalid,
         }
@@ -411,7 +411,7 @@ impl UserResponse {
             ret.status = UserStatus::Unknown;
             ret.rsi_id = None;
         }
-        if scopes.contains(&Scope::GetDiscordID) {
+        if scopes.contains(&Scope::GetDiscordId) {
             ret.discord_sf = self.discord_sf.clone();
         }
         ret
