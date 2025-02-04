@@ -289,11 +289,12 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
         )
         .await
         {
-            let mut hasher = Sha256::new();
-            hasher.update(request.client_secret.unwrap());
-            let result = hasher.finalize();
-            let sec_hash = Base64::encode_string(&result);
-            if sec_hash != app.secret {
+            // let mut hasher = Sha256::new();
+            // hasher.update(request.client_secret.unwrap());
+            // let result = hasher.finalize();
+            // let sec_hash = Base64::encode_string(&result);
+            let req_secret = request.client_secret.unwrap();
+            if req_secret != app.secret {
                 return ApiResponse::Unauthorized;
             }
 
