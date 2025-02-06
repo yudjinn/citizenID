@@ -295,7 +295,8 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
             // let sec_hash = Base64::encode_string(&result);
             let req_secret = request.client_secret.unwrap();
             if req_secret != app.secret {
-                return ApiResponse::Unauthorized;
+                // return ApiResponse::Unauthorized;
+                return ApiResponse::MissingData(json!("secret mismatch."));
             }
 
             // make sure the code matches the app
@@ -305,7 +306,8 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
             .await
             {
                 if auth_success.client_id != app.id.to_string() {
-                    return ApiResponse::Unauthorized;
+                    // return ApiResponse::Unauthorized;
+                    return ApiResponse::MissingData(json!("Client ID mismatch."));
                 }
 
                 // remove the code
@@ -340,7 +342,11 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                 }
             }
         }
-        ApiResponse::Unauthorized
+        ApiResponse::MissingData(json!(format!(
+            "Could not find matching application: {}",
+            request.client_id
+        )))
+        // ApiResponse::Unauthorized
     }
 }
 
