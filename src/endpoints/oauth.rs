@@ -137,8 +137,12 @@ pub async fn approve_authorization(
         client_id: auth.client_id,
         client_name: auth.client_name,
     };
-    match db_handler::put_item::<ApprovedApplication>(aa).await {
+    match db_handler::put_item::<ApprovedApplication>(aa.clone()).await {
         Ok(approved_app) => {
+            println!(
+                "Successfully created record for user: {} -- app {}",
+                aa.user_id, aa.client_id
+            );
             match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
                 &approved_app.client_id.to_string(),
             )
