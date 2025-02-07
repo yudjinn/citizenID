@@ -317,30 +317,32 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                 {
                     // return the token login info
                     if let Ok(uid) = Uuid::parse_str(&auth_success.user_id) {
-                        if let Ok(scopes) = Scope::check_user_client_relationship(uid, app.id).await
-                        {
-                            let (r, a) = generate_token_pair(uid, app.id, None, scopes)
-                                .await
-                                .map_err(ApiResponse::InternalServerErrorWithMessage)
-                                .unwrap();
-                            let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
-                                .map_err(|_| ApiResponse::InternalServerError)
-                                .unwrap();
-                            let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
-                                .map_err(|_| ApiResponse::InternalServerError)
-                                .unwrap();
+                        match Scope::check_user_client_relationship(uid, app.id).await {
+                            Ok(scopes) => {
+                                let (r, a) = generate_token_pair(uid, app.id, None, scopes)
+                                    .await
+                                    .map_err(ApiResponse::InternalServerErrorWithMessage)
+                                    .unwrap();
+                                let signed_ref_token =
+                                    encode(&Header::default(), &r, &KEYS.encoding)
+                                        .map_err(|_| ApiResponse::InternalServerError)
+                                        .unwrap();
+                                let signed_auth_token =
+                                    encode(&Header::default(), &a, &KEYS.encoding)
+                                        .map_err(|_| ApiResponse::InternalServerError)
+                                        .unwrap();
 
-                            return ApiResponse::Success(
-                                serde_json::to_value(AuthResponse {
-                                    auth_token: signed_auth_token,
-                                    refresh_token: signed_ref_token,
-                                })
-                                .unwrap(),
-                            );
-                        } else {
-                            return ApiResponse::MissingData(json!(format!(
-                                "Could not find matching client-user relationship"
-                            )));
+                                return ApiResponse::Success(
+                                    serde_json::to_value(AuthResponse {
+                                        auth_token: signed_auth_token,
+                                        refresh_token: signed_ref_token,
+                                    })
+                                    .unwrap(),
+                                );
+                            }
+                            Err(e) => {
+                                return ApiResponse::InternalServerErrorWithMessage(e);
+                            }
                         }
                     } else {
                         return ApiResponse::MissingData(json!(format!(
