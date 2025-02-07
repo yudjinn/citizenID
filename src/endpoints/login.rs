@@ -337,9 +337,26 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                 })
                                 .unwrap(),
                             );
+                        } else {
+                            return ApiResponse::MissingData(json!(format!(
+                                "Could not find matching client-user relationship"
+                            )));
                         }
+                    } else {
+                        return ApiResponse::MissingData(json!(format!(
+                            "Could not parse uuid from string:{}",
+                            &auth_success.user_id
+                        )));
                     }
+                } else {
+                    return ApiResponse::MissingData(json!(format!(
+                        "Failed to delete auth-success record."
+                    )));
                 }
+            } else {
+                return ApiResponse::MissingData(json!(format!(
+                    "Failed to find auth-success record."
+                )));
             }
         }
         ApiResponse::MissingData(json!(format!(
