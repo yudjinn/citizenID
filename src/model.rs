@@ -320,11 +320,12 @@ impl Scope {
                     }
                 }
                 Err(Error::msg(format!(
-                    "Could not find record for {}",
-                    client_id
+                    "Could not find association record for client {} and user {}",
+                    client_id, user_id,
                 )))
             }
-            Err(_) => Err(Error::msg(format!("Could not find record for {}", user_id))),
+            // Err(_) => Err(Error::msg(format!("Could not find record for {}", user_id))),
+            Err(e) => Err(e),
         }
     }
 
