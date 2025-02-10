@@ -9,6 +9,9 @@ use axum::{extract, Json};
 use axum::{Extension, Router};
 use base64ct::Base64;
 use base64ct::Encoding;
+use chrono::serde::ts_seconds;
+use chrono::DateTime;
+use chrono::Utc;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
@@ -98,8 +101,10 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
 
                                 ApiResponse::Success(
                                     serde_json::to_value(AuthResponse {
-                                        auth_token: signed_auth_token,
+                                        access_token: signed_auth_token,
                                         refresh_token: signed_ref_token,
+                                        expires_in: a.exp,
+                                        token_type: TokenType::Bearer,
                                     })
                                     .unwrap(),
                                 )
@@ -191,8 +196,10 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
 
                     ApiResponse::Success(
                         serde_json::to_value(AuthResponse {
-                            auth_token: signed_auth_token,
+                            access_token: signed_auth_token,
                             refresh_token: signed_ref_token,
+                            expires_in: a.exp,
+                            token_type: TokenType::Bearer,
                         })
                         .unwrap(),
                     )
@@ -230,8 +237,10 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
 
                         ApiResponse::Success(
                             serde_json::to_value(AuthResponse {
-                                auth_token: signed_auth_token,
+                                access_token: signed_auth_token,
                                 refresh_token: signed_ref_token,
+                                expires_in: a.exp,
+                                token_type: TokenType::Bearer,
                             })
                             .unwrap(),
                         )
@@ -334,8 +343,10 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
 
                                 return ApiResponse::Success(
                                     serde_json::to_value(AuthResponse {
-                                        auth_token: signed_auth_token,
+                                        access_token: signed_auth_token,
                                         refresh_token: signed_ref_token,
+                                        expires_in: a.exp,
+                                        token_type: TokenType::Bearer,
                                     })
                                     .unwrap(),
                                 );
@@ -401,8 +412,10 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
 
                     ApiResponse::Success(
                         serde_json::to_value(AuthResponse {
-                            auth_token: signed_auth_token,
+                            access_token: signed_auth_token,
                             refresh_token: signed_ref_token,
+                            expires_in: a.exp,
+                            token_type: TokenType::Bearer,
                         })
                         .unwrap(),
                     )
@@ -457,10 +470,20 @@ pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Respo
     Ok(next.run(req).await)
 }
 
+#[derive(Clone, Deserialize, Serialize, Default)]
+pub enum TokenType {
+    #[default]
+    Bearer,
+    Access,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct AuthResponse {
-    auth_token: String,
+    access_token: String,
     refresh_token: String,
+    #[serde(with = "ts_seconds")]
+    pub expires_in: DateTime<Utc>,
+    token_type: TokenType,
 }
 
 pub struct Keys {
