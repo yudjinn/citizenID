@@ -28,7 +28,7 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
     "client_secret": "secret from setup"
 }
 ```
-- This will return an `auth_token` and `refresh_token`. The `auth_token` will have the scopes specified during the oauth process, and the `refresh_token` can be used to get a new token set on expiry.
+- This will return an `access_token` and `refresh_token`. The `access_token` will have the scopes specified during the oauth process, and the `refresh_token` can be used to get a new token set on expiry.
 4. To get a new token set, a POST request to `citizen-id.space/login/token` with the body:
 ```json
 {
@@ -44,7 +44,7 @@ App will provide some kind of "Login with CitizenID!" button. This button will d
 - "get_discord"
 
 ## Usage
-The `auth_token` from the [Setup](#setup) section can be used to hit the API as if you were the user.
+The `access_token` from the [Setup](#setup) section can be used to hit the API as if you were the user.
 The API endpoints are detailed more in [endpoints.md](/docs/endpoints.md), but the key usage is:
 API URI: `api.citizen-id.space`
-Headers: `auth_token`
+Headers: `access_token`

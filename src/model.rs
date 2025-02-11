@@ -497,8 +497,8 @@ impl User {
         }
     }
 
-    pub async fn get_auth_user(auth_token: &str) -> Result<Option<Self>> {
-        match AuthToken::from_header_str(auth_token).await {
+    pub async fn get_auth_user(access_token: &str) -> Result<Option<Self>> {
+        match AuthToken::from_header_str(access_token).await {
             Ok(at) => {
                 db_handler::get_item_from_table_with_filter_by_id::<User>(&at.user_id.to_string())
                     .await

@@ -94,14 +94,14 @@ async fn login_with_email(extract::Json(login): extract::Json<LoginUser>) -> Api
                                     encode(&Header::default(), &r, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
-                                let signed_auth_token =
+                                let signed_access_token =
                                     encode(&Header::default(), &a, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
 
                                 ApiResponse::Success(
                                     serde_json::to_value(AuthResponse {
-                                        access_token: signed_auth_token,
+                                        access_token: signed_access_token,
                                         refresh_token: signed_ref_token,
                                         expires_in: a.exp,
                                         token_type: TokenType::Bearer,
@@ -190,13 +190,13 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
                     let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
-                    let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                    let signed_access_token = encode(&Header::default(), &a, &KEYS.encoding)
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
 
                     ApiResponse::Success(
                         serde_json::to_value(AuthResponse {
-                            access_token: signed_auth_token,
+                            access_token: signed_access_token,
                             refresh_token: signed_ref_token,
                             expires_in: a.exp,
                             token_type: TokenType::Bearer,
@@ -231,13 +231,13 @@ async fn login_with_discord(Json(token): Json<DiscordTokenLogin>) -> ApiResponse
                         let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                             .map_err(|_| ApiResponse::InternalServerError)
                             .unwrap();
-                        let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                        let signed_access_token = encode(&Header::default(), &a, &KEYS.encoding)
                             .map_err(|_| ApiResponse::InternalServerError)
                             .unwrap();
 
                         ApiResponse::Success(
                             serde_json::to_value(AuthResponse {
-                                access_token: signed_auth_token,
+                                access_token: signed_access_token,
                                 refresh_token: signed_ref_token,
                                 expires_in: a.exp,
                                 token_type: TokenType::Bearer,
@@ -336,14 +336,14 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                     encode(&Header::default(), &r, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
-                                let signed_auth_token =
+                                let signed_access_token =
                                     encode(&Header::default(), &a, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
 
                                 return ApiResponse::Raw(
                                     serde_json::to_value(AuthResponse {
-                                        access_token: signed_auth_token,
+                                        access_token: signed_access_token,
                                         refresh_token: signed_ref_token,
                                         expires_in: a.exp,
                                         token_type: TokenType::Bearer,
@@ -406,13 +406,13 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
                     let signed_ref_token = encode(&Header::default(), &r, &KEYS.encoding)
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
-                    let signed_auth_token = encode(&Header::default(), &a, &KEYS.encoding)
+                    let signed_access_token = encode(&Header::default(), &a, &KEYS.encoding)
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
 
                     ApiResponse::Raw(
                         serde_json::to_value(AuthResponse {
-                            access_token: signed_auth_token,
+                            access_token: signed_access_token,
                             refresh_token: signed_ref_token,
                             expires_in: a.exp,
                             token_type: TokenType::Bearer,
@@ -438,7 +438,7 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
 pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()
-        .get("auth_token")
+        .get("access_token")
         .and_then(|h| h.to_str().ok());
 
     let auth_header = if let Some(auth_header) = auth_header {

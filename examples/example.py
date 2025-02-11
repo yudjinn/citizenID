@@ -17,7 +17,7 @@ client = WebApplicationClient(client_id)
 
 
 headers={
-        "Auth_token": auth_token,
+        "access_token": auth_token,
         "Origin": "https://staging.citizen-id.space",
          }
 preflight_url = "https://api-staging.citizen-id.space/oauth?client_id=b10cadbb-f041-48e1-902d-e4a356ded54d&state=test&scopes=get_user"

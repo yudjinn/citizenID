@@ -1,9 +1,9 @@
 # Endpoints
 ## Authentication
 headers:
-- `auth_token`
+- `access_token`
 
-- Endpoints marked with a 🔒 require a valid `auth_token` in  the header
+- Endpoints marked with a 🔒 require a valid `access_token` in  the header
 - Endpoints marked with 🚫 can only be accessed from certain contexts, and should not be relied upon by applications.
 
 ## Misc
@@ -17,13 +17,13 @@ GET "/ping" : {} => "pong"
 	email: String,
 	password: String,
 } => {
-	"auth_token": String,
+	"access_token": String,
 	"refresh_token": String,
 	"client_id": Uuid
 }
 
 🔒 POST  "/login/token" : {
-	auth_token: String
+	access_token: String
 } => {
 	"grant_type": "refresh_token",
 	"refresh_token": String,
@@ -31,7 +31,7 @@ GET "/ping" : {} => "pong"
 }
 
 🔒 POST  "/login/token" : {
-	auth_token: String
+	access_token: String
 } => {
 	"grant_type": "authorization_code",
 	"authorization_code": String,

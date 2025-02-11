@@ -85,7 +85,7 @@ async fn main() -> Result<(), RuntimeError> {
         ])
         .allow_headers([
             CONTENT_TYPE,
-            HeaderName::from_lowercase(b"auth_token").unwrap(),
+            HeaderName::from_lowercase(b"access_token").unwrap(),
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ]);
     if cors_creds && !cors_origins.is_empty() {
