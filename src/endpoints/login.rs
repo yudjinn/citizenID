@@ -298,10 +298,6 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
         )
         .await
         {
-            // let mut hasher = Sha256::new();
-            // hasher.update(request.client_secret.unwrap());
-            // let result = hasher.finalize();
-            // let sec_hash = Base64::encode_string(&result);
             let req_secret = request.client_secret.unwrap();
             if req_secret != app.secret {
                 // return ApiResponse::Unauthorized;
@@ -340,6 +336,8 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                     encode(&Header::default(), &a, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
+                                        
+                                println!("Success! Returning token set.")
 
                                 return ApiResponse::Raw(
                                     serde_json::to_value(AuthResponse {
