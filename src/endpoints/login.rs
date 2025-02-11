@@ -337,7 +337,7 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
                                         
-                                println!("Success! Returning token set.")
+                                println!("Success! Returning token set.");
 
                                 return ApiResponse::Raw(
                                     serde_json::to_value(AuthResponse {
