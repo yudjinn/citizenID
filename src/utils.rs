@@ -82,7 +82,7 @@ impl From<ApiResponse> for u16 {
             ApiResponse::NotImplemented => 501,
             ApiResponse::ResourceExists => 409,
             ApiResponse::Success(_) => 200,
-            ApiResponse::Raw(_) => 0,
+            ApiResponse::Raw(_) => 200,
         }
     }
 }
