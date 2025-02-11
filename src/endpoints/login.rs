@@ -341,7 +341,7 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
 
-                                return ApiResponse::Success(
+                                return ApiResponse::Raw(
                                     serde_json::to_value(AuthResponse {
                                         access_token: signed_auth_token,
                                         refresh_token: signed_ref_token,
@@ -410,7 +410,7 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
                         .map_err(|_| ApiResponse::InternalServerError)
                         .unwrap();
 
-                    ApiResponse::Success(
+                    ApiResponse::Raw(
                         serde_json::to_value(AuthResponse {
                             access_token: signed_auth_token,
                             refresh_token: signed_ref_token,

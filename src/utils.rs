@@ -68,6 +68,7 @@ pub enum ApiResponse {
     NotImplemented,
     ResourceExists,
     Success(Value),
+    Raw(Value),
 }
 
 impl From<ApiResponse> for u16 {
@@ -81,6 +82,7 @@ impl From<ApiResponse> for u16 {
             ApiResponse::NotImplemented => 501,
             ApiResponse::ResourceExists => 409,
             ApiResponse::Success(_) => 200,
+            ApiResponse::Raw(_) => 0,
         }
     }
 }
@@ -108,15 +110,25 @@ impl IntoResponse for ApiResponse {
             ApiResponse::NotFound => (StatusCode::NOT_FOUND, json!("Not found.")),
             ApiResponse::ResourceExists => (StatusCode::CONFLICT, json!("Resource exists.")),
             ApiResponse::Success(ref v) => (StatusCode::OK, v.clone()),
+            ApiResponse::Raw(ref v) => (StatusCode::OK, v.clone()),
         };
-        let body = ApiResponseBody {
-            status: self.into(),
-            payload,
-        };
-        Response::builder()
-            .status(status)
-            .body(serde_json::to_string_pretty(&body).unwrap_or_default())
-            .unwrap()
-            .into_response()
+        match self {
+            ApiResponse::Raw(payload) => Response::builder()
+                .status(200)
+                .body(serde_json::to_string_pretty(&payload).unwrap_or_default())
+                .unwrap()
+                .into_response(),
+            _ => {
+                let body = ApiResponseBody {
+                    status: self.into(),
+                    payload,
+                };
+                Response::builder()
+                    .status(status)
+                    .body(serde_json::to_string_pretty(&body).unwrap_or_default())
+                    .unwrap()
+                    .into_response()
+            }
+        }
     }
 }
