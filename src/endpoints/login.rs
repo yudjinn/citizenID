@@ -336,7 +336,7 @@ pub async fn auth_code_workflow(request: RefreshTokenRequest) -> ApiResponse {
                                     encode(&Header::default(), &a, &KEYS.encoding)
                                         .map_err(|_| ApiResponse::InternalServerError)
                                         .unwrap();
-                                        
+
                                 println!("Success! Returning token set.");
 
                                 return ApiResponse::Raw(
@@ -436,13 +436,28 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
 pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()
-        .get("access_token")
+        .get("Authorization")
         .and_then(|h| h.to_str().ok());
 
-    let auth_header = if let Some(auth_header) = auth_header {
-        auth_header
-    } else {
-        return Err(ApiResponse::Unauthorized);
+    // let auth_header = if let Some(auth_header) = auth_header {
+    //     auth_header
+    // } else {
+    //     return Err(ApiResponse::Unauthorized);
+    // };
+    let auth_header = match auth_header {
+        Some(header) => {
+            if header.contains("Bearer ") {
+                let token = header.split_once(" ").unwrap();
+                token.1
+            } else {
+                return Err(ApiResponse::MissingData(json!(
+                    "Malformed authorization header"
+                )));
+            }
+        }
+        None => {
+            return Err(ApiResponse::Unauthorized);
+        }
     };
 
     let scopes = match Scope::get_scopes_from_token(auth_header).await {

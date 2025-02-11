@@ -100,7 +100,6 @@ pub async fn init_authorization(
         }
         for s in params.scope.split(del).map(|t| t.to_owned()) {
             let b: Scope = Scope::from(s.clone());
-            println!("FOUND SCOPE: {:?}", b);
             if b == Scope::Invalid {
                 return ApiResponse::MissingData(json!(format!("Scope {} is invalid", s)));
             } else {
@@ -139,10 +138,6 @@ pub async fn approve_authorization(
     };
     match db_handler::put_item::<ApprovedApplication>(aa.clone()).await {
         Ok(approved_app) => {
-            println!(
-                "Successfully created record for user: {} -- app {}",
-                aa.user_id, aa.client_id
-            );
             match db_handler::get_item_from_table_with_filter_by_id::<ApplicationDB>(
                 &approved_app.client_id.to_string(),
             )
