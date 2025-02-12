@@ -88,7 +88,9 @@ async fn main() -> Result<(), RuntimeError> {
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ]);
 
-    cors = cors.allow_credentials(true).allow_origin(cors_origins);
+    cors = cors
+        .allow_credentials(CORS_ALLOW_CREDENTIALS.to_owned())
+        .allow_origin(cors_origins);
 
     let app = Router::new()
         .route("/health", get(health))
