@@ -12,6 +12,7 @@ use base64ct::Encoding;
 use chrono::serde::ts_seconds;
 use chrono::DateTime;
 use chrono::Utc;
+use http::HeaderName;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use reqwest::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
@@ -436,7 +437,7 @@ pub async fn refresh_token_workflow(request: RefreshTokenRequest) -> ApiResponse
 pub async fn auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, ApiResponse> {
     let auth_header = req
         .headers()
-        .get("Authorization")
+        .get(HeaderName::from_lowercase(b"authorization").unwrap())
         .and_then(|h| h.to_str().ok());
 
     // let auth_header = if let Some(auth_header) = auth_header {

@@ -73,7 +73,6 @@ async fn main() -> Result<(), RuntimeError> {
         .iter_mut()
         .map(|v| v.parse::<HeaderValue>().unwrap())
         .collect();
-    let cors_creds = *CORS_ALLOW_CREDENTIALS;
 
     let mut cors = CorsLayer::new()
         .allow_methods([
@@ -85,16 +84,11 @@ async fn main() -> Result<(), RuntimeError> {
         ])
         .allow_headers([
             CONTENT_TYPE,
-            HeaderName::from_lowercase(b"access_token").unwrap(),
+            HeaderName::from_lowercase(b"authorization").unwrap(),
             HeaderName::from_lowercase(b"refresh_token").unwrap(),
         ]);
-    if cors_creds && !cors_origins.is_empty() {
-        cors = cors.allow_credentials(true).allow_origin(cors_origins);
-    } else if !cors_creds && cors_origins.is_empty() {
-        cors = cors.allow_origin(Any);
-    } else {
-        panic!("Invalid CORS Configuration.");
-    }
+
+    cors = cors.allow_credentials(true).allow_origin(cors_origins);
 
     let app = Router::new()
         .route("/health", get(health))
