@@ -10,6 +10,7 @@ strip = true
 # compile-time differences for lambda usage
 tempdb = []
 dynamodb = []
+production = []
 lambda = ["dynamodb"]
 default = ["dynamodb"]
 

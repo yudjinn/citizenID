@@ -23,7 +23,7 @@ jobs:
     - name: Update dependencies
       run: cargo update
     - name: Build Application
-      run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda
+      run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda ${{ env.BRANCH_NAME == 'main' && '--features production' }}
     - name: Rename output
       run: mv target/x86_64-unknown-linux-gnu/release/citizen_id bootstrap && chmod +x bootstrap
     - name: Archive production artifacts
@@ -32,19 +32,23 @@ jobs:
         name: lambda
         path: bootstrap
         retention-days: 14
+  deploy:
+    if: ${{ github.ref_name == 'main' || github.ref_name == 'staging' }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Download output from build
+      uses: actions/download-artifact@v4
+      with:
+        name: lambda
     - uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-2
     - run: zip -j lambda.zip ./bootstrap
-    # TODO: use this when staging is a real thing
-    # - run: | 
-    #     aws lambda update-function-code --function-name \
-    #       ${{ env.BRANCH_NAME == 'main' && 'corvus-production' || env.BRANCH_NAME == 'staging' && 'corvus-staging' || 'UNKNOWN' }} \
-    #       --zip-file=fileb://lambda.zip
     - run: | 
         aws lambda update-function-code --function-name \
-          'corvus-staging' \
+          ${{ env.BRANCH_NAME == 'main' && 'citizenid' || env.BRANCH_NAME == 'staging' && 'corvus-staging' || 'UNKNOWN' }} \
           --zip-file=fileb://lambda.zip
       

@@ -40,7 +40,11 @@ pub struct ApprovedApplication {
 }
 
 impl Model for ApprovedApplication {
-    const TABLE: &'static str = "corvus_approvals";
+    const TABLE: &'static str = if cfg!(feature = "production") {
+        "corvus_approvals"
+    } else {
+        "corvus_approvals-staging"
+    };
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -143,7 +147,11 @@ impl From<RefreshToken> for RefreshTokenDB {
 }
 
 impl Model for RefreshTokenDB {
-    const TABLE: &'static str = "corvus_auth";
+    const TABLE: &'static str = if cfg!(feature = "production") {
+        "corvus_auth"
+    } else {
+        "corvus_auth-staging"
+    };
 }
 
 impl RefreshTokenDB {
@@ -518,7 +526,11 @@ impl std::fmt::Debug for User {
 }
 
 impl Model for User {
-    const TABLE: &'static str = "corvus-users";
+    const TABLE: &'static str = if cfg!(feature = "production") {
+        "corvus_users"
+    } else {
+        "corvus_users-staging"
+    };
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -669,7 +681,11 @@ impl Application {
 }
 
 impl Model for ApplicationDB {
-    const TABLE: &'static str = "corvus-apps";
+    const TABLE: &'static str = if cfg!(feature = "production") {
+        "corvus_apps"
+    } else {
+        "corvus_apps-staging"
+    };
 }
 
 impl From<ApplicationDB> for ApplicationResponse {
@@ -763,7 +779,11 @@ pub struct AuthSuccessDB {
 }
 
 impl Model for AuthSuccessDB {
-    const TABLE: &'static str = "corvus_codes";
+    const TABLE: &'static str = if cfg!(feature = "production") {
+        "corvus_codes"
+    } else {
+        "corvus_codes-staging"
+    };
 }
 
 #[derive(Deserialize, Serialize, Clone)]
