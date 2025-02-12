@@ -23,7 +23,11 @@ jobs:
     - name: Update dependencies
       run: cargo update
     - name: Build Application
-      run: cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda ${{ env.BRANCH_NAME == 'main' && '--features production' }}
+      run: |
+          if [ ${{ env.BRANCH_NAME == 'main'}} ]; then
+          extra="--features production"
+          fi
+          cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda $extra
     - name: Rename output
       run: mv target/x86_64-unknown-linux-gnu/release/citizen_id bootstrap && chmod +x bootstrap
     - name: Archive production artifacts
