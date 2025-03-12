@@ -24,7 +24,7 @@ jobs:
       run: cargo update
     - name: Build Application
       run: |
-          if [ ${{ env.BRANCH_NAME == 'main'}} ]; then
+          if [ ${{ env.BRANCH_NAME }} == "main" ]; then
           extra="--features production"
           fi
           cargo build --release --verbose --target x86_64-unknown-linux-gnu --no-default-features --features lambda $extra
